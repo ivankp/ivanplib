@@ -4,7 +4,7 @@
 #include "ivanp/debug/type_str.hh"
 #include "ivanp/string/catstr.hh"
 #include "ivanp/utility/expand.hh"
-#include "ivanp/utility/tuple.hh"
+#include "ivanp/tuple.hh"
 
 using std::cout;
 using std::endl;
@@ -43,6 +43,11 @@ int main(int argc, char* argv[]) {
 
   const auto t2 = t1 | [](auto& x){ ++x; };
   t0 | prt, cout << endl;
+
+  ivanp::make_array(1,2,3) | [](auto&& x){
+    cout << x << ' ';
+    ivanp::prt_type<decltype(x)>();
+  };
 
   cout << "\n*** prt_all ***\n";
 

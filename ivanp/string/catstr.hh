@@ -1,5 +1,3 @@
-// Developed by Ivan Pogrebnyak, MSU
-
 #ifndef IVANP_CATSTR_HH
 #define IVANP_CATSTR_HH
 

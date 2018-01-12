@@ -5,6 +5,7 @@
 
 namespace ivanp {
 
+/*
 template <typename C>
 constexpr auto begin(C&& c) -> std::enable_if_t<
   std::is_rvalue_reference<C&&>::value,
@@ -28,6 +29,7 @@ constexpr auto end(C&& c) noexcept -> std::enable_if_t<
   !std::is_rvalue_reference<C&&>::value,
   decltype(std::end(std::forward<C>(c)))
 > { return std::end(std::forward<C>(c)); }
+*/
 
 }
 

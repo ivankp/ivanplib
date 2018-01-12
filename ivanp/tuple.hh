@@ -71,6 +71,22 @@ constexpr auto impl(T&& t, F&& f, std::index_sequence<I...>)
 
 } // end comprehend_tuple
 
+template <template<typename> typename Pred, typename Tuple>
+class indices_of_impl {
+  static constexpr size_t size = std::tuple_size<Tuple>::value;
+  template <size_t I, size_t... II> struct impl {
+    using type = std::conditional_t<
+      Pred<std::tuple_element_t<I,Tuple>>::value,
+      typename impl<I+1, II..., I>::type,
+      typename impl<I+1, II...>::type >;
+  };
+  template <size_t... II> struct impl<size,II...> {
+    using type = std::index_sequence<II...>;
+  };
+public:
+  using type = typename impl<0>::type;
+};
+
 } // end detail
 
 template <typename F, typename T>
@@ -80,8 +96,13 @@ constexpr decltype(auto) apply(F&& f, T&& t) {
   );
 }
 
+// find all indices of types in tuple, for which Pred::value is true
+template <template<typename> typename Pred, typename Tuple>
+using indices_of = typename detail::indices_of_impl<Pred,Tuple>::type;
+
 } // end namespace ivanp
 
+// call function, using tuple elements as its arguments
 template <typename T, typename F>
 inline decltype(auto) operator%(T&& t, F&& f) {
   return ivanp::detail::apply::impl(
@@ -89,11 +110,27 @@ inline decltype(auto) operator%(T&& t, F&& f) {
   );
 }
 
+// call function for each tuple element
 template <typename T, typename F>
-inline decltype(auto) operator|(T&& t, F&& f) {
+inline auto operator|(T&& t, F&& f)
+-> decltype(
+    ivanp::detail::comprehend_tuple::impl(
+      std::forward<T>(t), std::forward<F>(f), ivanp::tuple_indices<T>{} ) )
+{
   return ivanp::detail::comprehend_tuple::impl(
     std::forward<T>(t), std::forward<F>(f), ivanp::tuple_indices<T>{}
   );
 }
+
+namespace ivanp {
+
+#ifdef _GLIBCXX_ARRAY
+template <typename... Args>
+auto make_array(Args&&... args)
+-> std::array<std::common_type_t<std::decay_t<Args>...>,sizeof...(Args)>
+{ return { std::forward<Args>(args)... }; }
+#endif
+
+} // end namespace ivanp
 
 #endif
