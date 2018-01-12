@@ -34,6 +34,14 @@ auto reserve(size_t n) {
 }
 #endif
 
+struct deref {
+  template <typename T>
+  inline auto operator()(T&& x) const
+  noexcept(noexcept(*std::forward<T>(x)))
+  -> decltype(*std::forward<T>(x))
+  { return *std::forward<T>(x); }
+};
+
 }
 
 #endif

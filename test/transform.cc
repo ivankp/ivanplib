@@ -52,8 +52,16 @@ int main(int argc, char* argv[]) {
   ++zi;
   zi.base() | [](auto x){ cout << x << ' '; }, cout << endl;
 
-  // ivanp::zip(strings,ints) | [](auto&& x){
-  //   cout << x << ' ';
-  //   ivanp::prt_type<decltype(x)>();
-  // };
+  ivanp::zip(strings,ints,doubles,strings) | [](auto&& z){
+    ivanp::prt_type<decltype(z)>();
+    z | [](auto& x){ cout << x << ' '; }, cout << endl;
+  };
+
+  auto comp = doubles | [](auto x){ return ivanp::cat(x); };
+  comp += "hello" | [](auto x){ return ivanp::cat(x); };
+  comp | [](auto x){ cout << x << ' '; }, cout << endl;
+
+  ivanp::zip(strings,ints) | [](auto&& z) -> std::string {
+    return z % [](auto&&... x){ return ivanp::cat(x...); };
+  } | [](auto x){ cout << x << ' '; }, cout << endl;;
 }

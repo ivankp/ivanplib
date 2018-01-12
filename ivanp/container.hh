@@ -1,83 +1,26 @@
 #ifndef IVANP_TRANSFORM_HH
 #define IVANP_TRANSFORM_HH
 
+#include <iterator>
+
 #include "ivanp/tuple.hh"
-// #include "ivanp/utility/pack.hh"
 #include "ivanp/utility/detect.hh"
-// #include "ivanp/iter/iter.hh"
-
-/*
-namespace ivanp {
-
-namespace detail {
-
-template <typename F, typename... Cont>
-using zip_type = std::vector<std::tuple<rm_rref_t<
-  decltype(std::declval<F>()(ivanp::begin(std::declval<Cont>())))>... >>;
-
-struct deref {
-  template <typename T>
-  inline auto operator()(T&& x) const
-  noexcept(noexcept(*std::forward<T>(x)))
-  -> decltype(*std::forward<T>(x))
-  { return *std::forward<T>(x); }
-};
-
-}
-
-template <typename F, typename... Cont>
-inline auto zip(F&& f, Cont&&... cont) ->
-  std::enable_if_t<sizeof...(Cont), detail::zip_type<F,Cont&&...> >
-{
-  auto it = std::make_tuple(ivanp::begin(std::forward<Cont>(cont))...);
-  const auto end0 = ivanp::end(get_pack_head(std::forward<Cont>(cont)...));
-
-  // ivanp::prt_type<std::tuple<Cont&&...>>();
-  // ivanp::prt_type<decltype(std::get<0>(it))>();
-  ivanp::prt_type<decltype(*std::get<0>(it))>();
-  ivanp::prt_type<decltype(it | f)>();
-
-  detail::zip_type<F,Cont&&...> vec;
-  vec.reserve( std::distance( std::get<0>(it), end0 ) );
-
-  while (std::get<0>(it) != end0) {
-    it | [](auto& x){
-      // ivanp::prt_type<decltype(x)>();
-      std::cout << (*x) << ' ';
-    }, std::cout << std::endl;
-    vec.emplace_back(it | f);
-    it | [](auto& x){ std::cout << (*x) << ' '; }, std::cout << std::endl;
-    it | [](auto& x){ ++x; };
-  }
-
-  return vec;
-}
-template <typename... Cont>
-inline auto zip(Cont&&... cont) -> detail::zip_type<detail::deref,Cont&&...>
-{
-  return zip( detail::deref{}, std::forward<Cont>(cont)... );
-}
-*/
 
 namespace ivanp {
 
+template <typename C> 
+using detect_size = decltype(std::declval<C>().size());
+
+template <typename C> 
+constexpr auto size(const C& c) -> decltype(c.size()) { return c.size(); }
+template <typename C> 
+inline std::enable_if_t<
+  !ivanp::is_detected<detect_size,C>::value, size_t >
+size(const C& c) { return std::distance( std::begin(c), std::end(c) ); }
+template <class T, size_t N>
+constexpr size_t size(const T (&array)[N]) noexcept { return N; }
+
 namespace detail {
-
-struct deref {
-  template <typename T>
-  inline auto operator()(T&& x) const
-  noexcept(noexcept(*std::forward<T>(x)))
-  -> decltype(*std::forward<T>(x))
-  { return *std::forward<T>(x); }
-};
-
-template <typename... C>
-using zip_type = std::vector<std::tuple<
-  std::decay_t<decltype(*std::begin(std::declval<C>()))>...>>;
-
-// template <typename F, typename... C>
-// using zip_apply_type = std::vector<std::tuple<
-//   std::decay_t<decltype(*std::begin(std::declval<C>()))>...>>;
 
 template <typename... T>
 class zip_iter : public std::tuple<T...> {
@@ -90,6 +33,8 @@ public:
     return *this;
   }
   inline std::tuple<decltype(*std::declval<T>())...> operator*() {
+    // without specifying return type
+    // lambdas return by value
     return base() | [](auto& x) -> decltype(*x) { return *x; };
   }
   inline std::tuple<decltype(*std::declval<T>())...> operator*() const {
@@ -121,9 +66,18 @@ public:
   inline end_iter end() {
     return end(std::index_sequence_for<T...>{});
   }
+  inline size_t size() const { return std::get<0>(*this).size(); }
 };
 
+namespace comprehend_container {
+
+template <typename C, typename F>
+using return_type = std::decay_t<decltype(
+  std::declval<F>()( *std::begin(std::declval<C>()) ) )>;
+
 }
+
+} // end detail
 
 template <typename... C>
 inline detail::zipper<C&&...> zip(C&&... c) {
@@ -135,10 +89,49 @@ inline detail::zipper<C&&...> zip(C&&... c) {
 template <typename C, typename F>
 inline auto operator|(C&& c, F&& f)
 -> std::enable_if_t<
-  !ivanp::is_detected<ivanp::tuple_indices,C>::value
->
+  !ivanp::is_detected<ivanp::tuple_indices,C>::value &&
+  std::is_void<ivanp::detail::comprehend_container::return_type<C&,F&&>>::value,
+  C&& >
 {
-  for (auto&& x : c) std::forward<F>(f)(x);
+  for (auto&& x : std::forward<C>(c)) std::forward<F>(f)(x);
+  return std::forward<C>(c);
+}
+
+template <typename C, typename F>
+inline auto operator|(C&& c, F&& f)
+-> std::enable_if_t<
+  !ivanp::is_detected<ivanp::tuple_indices,C>::value &&
+  !std::is_void<ivanp::detail::comprehend_container::return_type<C&,F&&>>::value,
+  std::vector<ivanp::detail::comprehend_container::return_type<C&,F&&>> >
+{
+  std::vector<ivanp::detail::comprehend_container::return_type<C&,F&&>> vec;
+  vec.reserve(ivanp::size(c));
+
+  for (auto&& x : std::forward<C>(c))
+    vec.emplace_back( std::forward<F>(f)(x) );
+
+  return vec;
+}
+
+// template <typename T, typename F>
+// inline decltype(auto) operator|(std::initializer_list<T> c, F&& f) {
+//   return c | std::forward<F>(f);
+// }
+
+template <typename T>
+inline std::vector<T>& operator+=(std::vector<T>& v, const std::vector<T>& u) {
+  v.reserve(v.size()+u.size());
+  v.insert(v.end(), u.begin(), u.end());
+  return v;
+}
+template <typename T>
+inline std::vector<T>& operator+=(std::vector<T>& v, std::vector<T>&& u) {
+  v.reserve(v.size()+u.size());
+  v.insert(v.end(),
+    std::make_move_iterator(u.begin()),
+    std::make_move_iterator(u.end())
+  );
+  return v;
 }
 
 #endif
