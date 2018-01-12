@@ -1,7 +1,7 @@
 #ifndef IVANP_TYPE_STR_HH
 #define IVANP_TYPE_STR_HH
 
-#include "ivanp/utility/literal.hh"
+#include "ivanp/literal.hh"
 
 // https://stackoverflow.com/a/20170989/2640636
 

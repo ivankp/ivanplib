@@ -4,16 +4,23 @@
 #include <iterator>
 
 #include "ivanp/tuple.hh"
-#include "ivanp/utility/detect.hh"
+#include "ivanp/detect.hh"
 
 namespace ivanp {
 
-template <typename C> 
+template <typename T>
+auto reserve(size_t n) {
+  std::vector<T> _v;
+  _v.reserve(n);
+  return _v;
+}
+
+template <typename C>
 using detect_size = decltype(std::declval<C>().size());
 
-template <typename C> 
+template <typename C>
 constexpr auto size(const C& c) -> decltype(c.size()) { return c.size(); }
-template <typename C> 
+template <typename C>
 inline std::enable_if_t<
   !ivanp::is_detected<detect_size,C>::value, size_t >
 size(const C& c) { return std::distance( std::begin(c), std::end(c) ); }

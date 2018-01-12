@@ -1,5 +1,5 @@
-#ifndef IVANP_MATH_BOOLEAN_HH
-#define IVANP_MATH_BOOLEAN_HH
+#ifndef IVANP_BOOLEAN_HH
+#define IVANP_BOOLEAN_HH
 
 #include <type_traits>
 

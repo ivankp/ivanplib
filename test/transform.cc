@@ -3,9 +3,8 @@
 #include <string>
 
 #include "ivanp/debug/type_str.hh"
-#include "ivanp/string/catstr.hh"
+#include "ivanp/string/cat.hh"
 #include "ivanp/container.hh"
-#include "ivanp/utility/utility.hh"
 
 using std::cout;
 using std::endl;
@@ -63,5 +62,5 @@ int main(int argc, char* argv[]) {
 
   ivanp::zip(strings,ints) | [](auto&& z) -> std::string {
     return z % [](auto&&... x){ return ivanp::cat(x...); };
-  } | [](auto x){ cout << x << ' '; }, cout << endl;;
+  } | [](auto x){ cout << x << ' '; }, cout << endl;
 }

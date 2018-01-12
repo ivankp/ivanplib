@@ -2,8 +2,8 @@
 #include <string>
 
 #include "ivanp/debug/type_str.hh"
-#include "ivanp/string/catstr.hh"
-#include "ivanp/utility/expand.hh"
+#include "ivanp/string/cat.hh"
+#include "ivanp/expand.hh"
 #include "ivanp/tuple.hh"
 
 using std::cout;

@@ -1,7 +1,7 @@
 #ifndef IVANP_DETECT_HH
 #define IVANP_DETECT_HH
 
-#include "ivanp/utility/meta.hh"
+#include "ivanp/meta.hh"
 
 // http://en.cppreference.com/w/cpp/experimental/is_detected
 

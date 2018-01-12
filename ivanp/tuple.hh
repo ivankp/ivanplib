@@ -5,11 +5,11 @@
 #include <tuple>
 #include <functional>
 
-#include "ivanp/utility/meta.hh"
-#include "ivanp/math/boolean.hh"
+#include "ivanp/meta.hh"
+#include "ivanp/boolean.hh"
 
 #ifndef __cpp_fold_expressions
-#include "ivanp/utility/expand.hh"
+#include "ivanp/expand.hh"
 #endif
 
 namespace ivanp {

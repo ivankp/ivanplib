@@ -1,5 +1,5 @@
-#ifndef IVANP_CATSTR_HH
-#define IVANP_CATSTR_HH
+#ifndef IVANP_STRING_CAT_HH
+#define IVANP_STRING_CAT_HH
 
 #include <string>
 #include <sstream>

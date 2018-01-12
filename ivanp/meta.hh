@@ -14,6 +14,15 @@ struct nothing { };
 template <typename... T> struct make_void { typedef void type; };
 template <typename... T> using void_t = typename make_void<T...>::type;
 
+// substitute_t
+template <typename T, typename...> using substitute_t = T;
+
+// zero
+template <typename T> constexpr T zero(T) { return 0; }
+
+// make constant
+template <typename T> constexpr const T& as_const(T& x) noexcept { return x; }
+
 // curry
 template <template<typename,typename> typename Pred, typename T1>
 struct bind_first {

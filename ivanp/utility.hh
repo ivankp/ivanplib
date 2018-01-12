@@ -5,10 +5,6 @@
 
 namespace ivanp {
 
-template <typename T> constexpr T zero(T) { return 0; }
-
-template <typename T> const T& as_const(T& x) { return x; }
-
 template <typename T>
 struct named_ptr {
   using type = T;
@@ -24,15 +20,6 @@ struct named_ptr {
   inline type& operator*() const noexcept { return *p; }
   inline type* operator->() const noexcept { return p; }
 };
-
-#ifdef _GLIBCXX_VECTOR
-template <typename T>
-auto reserve(size_t n) {
-  std::vector<T> _v;
-  _v.reserve(n);
-  return _v;
-}
-#endif
 
 struct deref {
   template <typename T>
