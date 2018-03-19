@@ -10,12 +10,13 @@ template <typename T> using rm_rref_t = typename rm_rref<T>::type;
 // nothing
 struct nothing { };
 
-// void_t
-template <typename... T> struct make_void { typedef void type; };
-template <typename... T> using void_t = typename make_void<T...>::type;
-
 // substitute_t
-template <typename T, typename...> using substitute_t = T;
+template <typename T, typename...> struct make_subst { using type = T; };
+template <typename T, typename... _>
+using subst_t = typename make_subst<T,_...>::type;
+
+// void_t
+template <typename... _> using void_t = subst_t<void,_...>;
 
 // zero
 template <typename T> constexpr T zero(T) { return 0; }
