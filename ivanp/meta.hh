@@ -46,6 +46,12 @@ struct compose<F> {
   using type = F<T>;
 };
 
+// is_defined, has to be at least declared
+template <typename T, typename = void>
+struct is_defined: std::false_type { };
+template <typename T>
+struct is_defined<T,decltype(typeid(T),void())>: std::true_type { };
+
 }
 
 #endif
