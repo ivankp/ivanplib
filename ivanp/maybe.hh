@@ -4,6 +4,8 @@
 #include "ivanp/meta.hh"
 #include "ivanp/boolean.hh"
 
+namespace ivanp {
+
 template <typename T> struct is_nothing: std::false_type { };
 template <> struct is_nothing<nothing>: std::true_type { };
 
@@ -49,5 +51,6 @@ template <template<typename> typename Pred, typename M, bool N = false>
 constexpr bool maybe_is_v = maybe_is<Pred,M,N>::value;
 #endif
 
+}
 
 #endif
