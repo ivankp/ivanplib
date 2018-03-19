@@ -10,7 +10,7 @@ template <typename T> using rm_rref_t = typename rm_rref<T>::type;
 // nothing
 struct nothing { };
 
-// substitute_t
+// subst_t
 template <typename T, typename...> struct make_subst { using type = T; };
 template <typename T, typename... _>
 using subst_t = typename make_subst<T,_...>::type;
@@ -32,6 +32,18 @@ struct bind_first {
 template <template<typename,typename...> typename Pred, typename... T2>
 struct bind_tail {
   template <typename T1> using type = Pred<T1,T2...>;
+};
+
+// compose
+template <template<typename> typename F, template<typename> typename... Fs>
+struct compose {
+  template <typename T>
+  using type = F<typename compose<Fs...>::template type<T>>;
+};
+template <template<typename> typename F>
+struct compose<F> {
+  template <typename T>
+  using type = F<T>;
 };
 
 }
