@@ -3,7 +3,7 @@
 #include <string>
 
 #include "ivanp/debug/type_str.hh"
-#include "ivanp/string/cat.hh"
+#include "ivanp/string.hh"
 #include "ivanp/container.hh"
 
 using std::cout;
