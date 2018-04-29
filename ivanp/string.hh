@@ -3,7 +3,6 @@
 
 #include <string>
 #include <sstream>
-#include <utility>
 #include <cstring>
 #include "ivanp/expand.hh"
 
@@ -16,6 +15,9 @@ inline std::string cat(T&&... x) {
   return ss.str();
 }
 inline std::string cat() { return { }; }
+
+inline std::string cat(std::string x) { return x; }
+inline std::string cat(const char* x) { return x; }
 
 template <typename L>
 inline std::string lcat(const L& list, std::string sep=" ") {
