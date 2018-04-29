@@ -5,6 +5,7 @@
 #include "ivanp/debug/type_str.hh"
 #include "ivanp/string.hh"
 #include "ivanp/container.hh"
+#include "ivanp/splice.hh"
 
 using std::cout;
 using std::endl;

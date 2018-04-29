@@ -43,7 +43,9 @@ inline bool ends_with(const char* str, const char(&suffix)[N]) {
 }
 template <unsigned N>
 inline bool ends_with(const std::string& str, const char(&suffix)[N]) {
-  return ends_with<N>(str.c_str(),suffix);
+  const unsigned len = str.size();
+  if (len<N-1) return false;
+  return starts_with(str.c_str()+(len-N+1),suffix);
 }
 
 struct less_sz {

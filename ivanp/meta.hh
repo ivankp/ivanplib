@@ -16,7 +16,8 @@ template <typename T, typename... _>
 using subst_t = typename make_subst<T,_...>::type;
 
 // void_t
-template <typename... _> using void_t = subst_t<void,_...>;
+template <typename...> struct make_void { using type = void; };
+template <typename... Ts> using void_t = typename make_void<Ts...>::type;
 
 // zero
 template <typename T> constexpr T zero(T) { return 0; }

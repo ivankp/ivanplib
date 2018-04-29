@@ -12,6 +12,8 @@ DEPS := $(SRCS:.cc=.d)
 
 ifeq (0, $(words $(findstring $(MAKECMDGOALS), clean)))
 
+C_program_options := ../src/program_options/program_options.cc
+
 all: $(EXES)
 
 -include $(DEPS)

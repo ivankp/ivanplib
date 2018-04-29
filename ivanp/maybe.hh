@@ -28,8 +28,9 @@ template <typename T> struct is_just: std::false_type { };
 template <typename T> struct is_just<just<T>>: std::true_type { };
 template <typename T> struct is_just<just_value<T>>: std::true_type { };
 
-template <typename T> struct maybe : T {
+template <typename T> struct maybe {
   static_assert(is_just<T>::value || is_nothing<T>::value);
+  using type = T;
 };
 
 // maybe enable -----------------------------------------------------
@@ -50,6 +51,17 @@ struct maybe_is<Pred,just<T>,N>: bool_constant<Pred<T>::value> { };
 template <template<typename> typename Pred, typename M, bool N = false>
 constexpr bool maybe_is_v = maybe_is<Pred,M,N>::value;
 #endif
+
+// Make trait monadic -----------------------------------------------
+template <template<typename> typename F>
+class maybe_type_trait {
+  template <typename, typename = void>
+  struct impl { using type = nothing; };
+  template <typename T>
+  struct impl<T, void_t<typename F<T>::type> > { using type = just<F<T>>; };
+public:
+  template <typename T> using trait = typename impl<T>::type;
+};
 
 }
 

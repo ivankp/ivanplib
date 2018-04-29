@@ -3,6 +3,7 @@
 
 #include <utility>
 #include <tuple>
+#include <array>
 #include <functional>
 
 #include "ivanp/meta.hh"
@@ -124,12 +125,48 @@ inline auto operator|(T&& t, F&& f)
 
 namespace ivanp {
 
-#ifdef _GLIBCXX_ARRAY
 template <typename... Args>
 auto make_array(Args&&... args)
 -> std::array<std::common_type_t<std::decay_t<Args>...>,sizeof...(Args)>
 { return { std::forward<Args>(args)... }; }
-#endif
+
+// Detect STD types =================================================
+template <typename> struct is_std_tuple: std::false_type { };
+template <typename... T> struct is_std_tuple<std::tuple<T...>>: std::true_type { };
+
+template <typename> struct is_std_array: std::false_type { };
+template <typename T, size_t N>
+struct is_std_array<std::array<T,N>>: std::true_type { };
+
+template <typename> struct is_std_pair: std::false_type { };
+template <typename T1, typename T2>
+struct is_std_pair<std::pair<T1,T2>>: std::true_type { };
+
+template <typename T>
+using is_std_tuple_like = disjunction<
+  is_std_tuple<T>, is_std_array<T>, is_std_pair<T>
+>;
+
+// Remove const from tuple elements =================================
+template <typename T> struct rm_const_elements {
+  using type = T;
+};
+template <typename T1, typename T2>
+struct rm_const_elements<std::pair<T1,T2>> {
+  using type = std::pair<std::remove_const_t<T1>,std::remove_const_t<T2>>;
+};
+template <typename... Ts>
+struct rm_const_elements<std::tuple<Ts...>> {
+  using type = std::tuple<std::remove_const_t<Ts>...>;
+};
+template <typename T, size_t N>
+struct rm_const_elements<std::array<T,N>> {
+  using type = std::array<std::remove_const_t<T>,N>;
+};
+template <typename T>
+using rm_const_elements_t = typename rm_const_elements<T>::type;
+
+// ==================================================================
 
 } // end namespace ivanp
 
