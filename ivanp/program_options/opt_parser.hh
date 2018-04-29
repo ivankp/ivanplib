@@ -12,7 +12,7 @@
 #include "ivanp/maybe_valid.hh"
 #include "ivanp/traits.hh"
 #include "ivanp/enable_case.hh"
-#include "ivanp/tuple.hh"
+#include "ivanp/elem.hh"
 #include "ivanp/is_std_vector.hh"
 
 namespace ivanp { namespace po {
@@ -102,7 +102,7 @@ struct arg_parser_switch<3,T>: maybe_is<
 template <typename T>
 inline enable_case<arg_parser_switch,3,T>
 arg_parser_impl(const char* arg, T& var) {
-  rm_const_elements_t<typename T::value_type> x;
+  rm_const_elem_t<typename T::value_type> x;
   arg_parser(arg,x);
   maybe_emplace(var,std::move(x));
 }

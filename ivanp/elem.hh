@@ -5,8 +5,10 @@
 
 namespace ivanp {
 
-// Remove const from element types
-template <template<typename> class, typename> struct transform_elem;
+template <template<typename> class, typename T>
+struct transform_elem {
+  using type = T; // default to doing nothing
+};
 
 #ifdef _GLIBCXX_UTILITY
 template <template<typename> class F, typename T1, typename T2>

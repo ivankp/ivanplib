@@ -147,25 +147,6 @@ using is_std_tuple_like = disjunction<
   is_std_tuple<T>, is_std_array<T>, is_std_pair<T>
 >;
 
-// Remove const from tuple elements =================================
-template <typename T> struct rm_const_elements {
-  using type = T;
-};
-template <typename T1, typename T2>
-struct rm_const_elements<std::pair<T1,T2>> {
-  using type = std::pair<std::remove_const_t<T1>,std::remove_const_t<T2>>;
-};
-template <typename... Ts>
-struct rm_const_elements<std::tuple<Ts...>> {
-  using type = std::tuple<std::remove_const_t<Ts>...>;
-};
-template <typename T, size_t N>
-struct rm_const_elements<std::array<T,N>> {
-  using type = std::array<std::remove_const_t<T>,N>;
-};
-template <typename T>
-using rm_const_elements_t = typename rm_const_elements<T>::type;
-
 // ==================================================================
 
 } // end namespace ivanp
