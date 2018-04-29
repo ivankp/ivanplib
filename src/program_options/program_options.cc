@@ -6,9 +6,6 @@
 #define IVANP_PROGRAM_OPTIONS_CC
 #include "ivanp/program_options.hh"
 
-#define TEST(var) \
-  std::cout << "\033[36m" #var "\033[0m = " << var << std::endl;
-
 using std::cout;
 using std::cerr;
 using std::endl;
