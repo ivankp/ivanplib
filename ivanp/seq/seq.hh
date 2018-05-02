@@ -45,6 +45,9 @@ struct increment<std::integer_sequence<T,I...>, Inc> {
 template <typename Seq, typename Seq::value_type Inc>                           
 using increment_t = typename increment<Seq,Inc>::type;                          
 
+template <size_t A, size_t B>
+using make_index_range = increment_t<std::make_index_sequence<B-A>,A>;
+
 }}
 
 #endif

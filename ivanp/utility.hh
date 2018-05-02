@@ -1,6 +1,9 @@
 #ifndef IVANP_UTILITY_HH
 #define IVANP_UTILITY_HH
 
+#define IVANP_TRIPPLE_FCN(CODE) \
+  noexcept(noexcept(CODE)) -> decltype(CODE) { return CODE; }
+
 #include <string>
 
 namespace ivanp {
@@ -24,9 +27,7 @@ struct named_ptr {
 struct deref {
   template <typename T>
   inline auto operator()(T&& x) const
-  noexcept(noexcept(*std::forward<T>(x)))
-  -> decltype(*std::forward<T>(x))
-  { return *std::forward<T>(x); }
+  IVANP_TRIPPLE_FCN(*std::forward<T>(x))
 };
 
 }
