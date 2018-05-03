@@ -3,10 +3,25 @@
 
 #include <ostream>
 #include "ivanp/binner.hh"
+#include "ivanp/expand.hh"
 
 namespace ivanp {
 
 namespace detail {
+
+template <typename AxisSpec>
+void axis_to_json(std::ostream& os, const typename AxisSpec::axis& axis) {
+  os << "{\"uf\":" << AxisSpec::under::value
+     << ",\"of\":" << AxisSpec::over::value
+     << ",\"edges\":[";
+  auto n = axis.nedges();
+  for (decltype(n) i=0; i<n; ++i) {
+    if (i) os << ',';
+    os << axis.edge(i);
+  }
+  os << "]}";
+}
+
 template <
   typename Bin,
   typename AxesSpecs,
@@ -19,22 +34,19 @@ void to_json(
   std::index_sequence<I...>
 ) {
   os << std::boolalpha << "{\"axes\":[";
-  {
-    if (I) os << ',';
-    using spec = std::tuple_element_t<I,AxesSpecs>;
-    os << "{\"uf\":" << spec::under::value
-       << ",\"of\":" << spec::over::value
-       << ",\"edges\":[";
-    const auto& axis = hist.axis<I>();
-    const auto n = axis.nedges();
-    for (axis_size_type i=0; i<n; ++i) {
-      if (i) os << ',';
-      os << axis.edge(i);
-    }
-    os << "]}";
-  }...;
+
+  EXPAND((
+    os << (I ? "," : ""),
+    axis_to_json<std::tuple_element_t<I,AxesSpecs>>(os,hist.template axis<I>())
+  ))
+
   os << "],\"bins\":[";
-  
+  bool first = true;
+  for (const auto& bin : hist.bins()) {
+    if (first) first = false;
+    else os << ',';
+    to_json(os,bin);
+  }
   os << "]}";
 }
 }
@@ -49,7 +61,7 @@ void to_json(
   const ivanp::binner<Bin,AxesSpecs,Container,Filler>& hist
 ) {
   return detail::to_json(os,hist,
-    std::make_index_sequence<std::tuple_size<AxesSpecs>::value>);
+    std::make_index_sequence<std::tuple_size<AxesSpecs>::value>{});
 }
 
 }
