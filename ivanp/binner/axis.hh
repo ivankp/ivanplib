@@ -3,6 +3,7 @@
 #ifndef IVANP_AXIS_HH
 #define IVANP_AXIS_HH
 
+#include <ostream>
 #include <algorithm>
 #include <cmath>
 #include <utility>
