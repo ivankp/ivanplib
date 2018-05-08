@@ -3,12 +3,12 @@
 
 #include <cmath>
 
-namespace ivanp { namespace poly {
+namespace ivanp { namespace math { namespace poly {
 
-template <typename T, typename U> // x -> ax+b
+template <typename T, typename U> // x -> (x-a)/b
 void transform_coords(double a, double b, int n, const T* oldc, U* newc) {
   int i, j, q0, q;
-  if (n<2) return;
+  if (n<1) return;
 
   int *p = new int[n]; // Pascal's triangle
   p[0] = 1;
@@ -34,6 +34,6 @@ void transform_coords(double a, double b, int n, const T* oldc, U* newc) {
   delete[] p;
 }
 
-}}
+}}}
 
 #endif
