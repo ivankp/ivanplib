@@ -2,7 +2,7 @@
 #define IVANP_MINUIT_HH
 
 #include <utility>
-#include "TMinuit.h"
+#include <TMinuit.h>
 
 template <typename F>
 class minuit final: public TMinuit {
