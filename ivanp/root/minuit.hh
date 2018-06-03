@@ -22,7 +22,7 @@ public:
 };
 
 template <typename F>
-inline minuit<F> make_minuit(unsigned npar, F&& f) {
+inline minuit<std::decay_t<F>> make_minuit(unsigned npar, F&& f) {
   return { npar, std::forward<F>(f) };
 }
 
