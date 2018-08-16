@@ -1,7 +1,9 @@
-#ifndef IVANP_CATEGORY_BIN_HH
-#define IVANP_CATEGORY_BIN_HH
+#ifndef CATEGORY_BIN_HH
+#define CATEGORY_BIN_HH
 
 #include "ivanp/enum_traits.hh"
+
+namespace ivanp {
 
 template <typename Bin, typename E, typename... Es>
 struct category_bin {
@@ -43,5 +45,7 @@ struct category_bin {
 
 template <typename Bin, typename E, typename... Es>
 unsigned category_bin<Bin,E,Es...>::_id = 0;
+
+}
 
 #endif
