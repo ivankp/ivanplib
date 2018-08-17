@@ -48,6 +48,26 @@ using increment_t = typename increment<Seq,Inc>::type;
 template <size_t A, size_t B>
 using make_index_range = increment_t<std::make_index_sequence<B-A>,A>;
 
+// inverse **********************************************************
+template <typename S, typename I
+  = std::make_integer_sequence<typename S::value_type, S::size()>
+> struct inverse;
+template <typename T, T... S, T... I>
+class inverse<std::integer_sequence<T,S...>,std::integer_sequence<T,I...>> {
+  typedef T arr[sizeof...(S)];
+
+  constexpr static auto inv(T j) {
+    arr aseq = { S... };
+    arr ainv = { };
+    for (T i=0; i<T(sizeof...(S)); ++i) ainv[aseq[i]] = i;
+    return ainv[j];
+  }
+
+public:
+  using type = std::integer_sequence<T,inv(I)...>;
+};
+template <typename S> using inverse_t = typename inverse<S>::type;
+
 }}
 
 #endif

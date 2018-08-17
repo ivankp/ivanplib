@@ -7,6 +7,13 @@ template <typename T> struct rm_rref { using type = T; };
 template <typename T> struct rm_rref<T&&> { using type = T; };
 template <typename T> using rm_rref_t = typename rm_rref<T>::type;
 
+template <typename T>
+struct add_const_to_ref { using type = T; };
+template <typename T>
+struct add_const_to_ref<T&> { using type = const T&; };
+template <typename T>
+using add_const_to_ref_t = typename add_const_to_ref<T>::type;
+
 // nothing
 struct nothing { };
 

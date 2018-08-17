@@ -56,6 +56,13 @@ struct less_sz {
   }
 };
 
+inline int strcmpi(const char* s1, const char* s2) {
+  for (;;++s1,++s2) {
+    if (toupper(*s1)!=toupper(*s2)) return (*s1-*s2);
+    if (*s1=='\0') return 0;
+  }
+}
+
 }
 
 #endif

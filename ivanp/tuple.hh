@@ -149,6 +149,20 @@ using is_std_tuple_like = disjunction<
 
 // ==================================================================
 
+// subtuple
+template <typename Tup, typename Elems> struct subtuple_trait;
+template <typename... T, size_t... I>
+struct subtuple_trait<std::tuple<T...>,std::index_sequence<I...>> {
+  using type = std::tuple<std::tuple_element_t<I,std::tuple<T...>>...>;
+};
+template <typename Tup, typename Elems>
+using subtuple_t = typename subtuple_trait<Tup,Elems>::type;
+
+// pack_is_tuple
+template <typename...> struct pack_is_tuple : std::false_type { };
+template <typename T> struct pack_is_tuple<T>
+: std::integral_constant<bool, is_std_tuple<T>::value> { };
+
 } // end namespace ivanp
 
 #endif

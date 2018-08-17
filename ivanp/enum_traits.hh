@@ -6,6 +6,7 @@
 #include <array>
 #include <stdexcept>
 
+#include <boost/preprocessor/stringize.hpp>
 #include <boost/preprocessor/seq/enum.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
 #include <boost/preprocessor/seq/transform.hpp>
