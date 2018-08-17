@@ -81,8 +81,8 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
         if (u) nums.clear();
 
         e = false;
-        l = false;        
-        u = false;        
+        l = false;
+        u = false;
       }
     }
   } // end while c
