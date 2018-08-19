@@ -264,6 +264,9 @@ public:
   inline const value_type& bin(index_array_cref ii) const {
     return _bins[index_impl(ii,std::make_index_sequence<naxes>())];
   }
+  inline const value_type& operator[](index_array_cref ii) const {
+    return bin(ii);
+  }
 
   // find bin -------------------------------------------------------
   template <typename... Args>
