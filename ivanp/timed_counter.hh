@@ -34,7 +34,6 @@ public:
 private:
   value_type cnt, cnt_start, cnt_end;
   time_type start = clock_type::now(), last = start;
-  int nb = 30;
   compare_type cmp;
 
   static const std::locale cnt_locale;
@@ -44,8 +43,9 @@ public:
     using std::cout;
     using std::setw;
     using std::setfill;
-    std::ios::fmtflags f(cout.flags());
+    const std::ios::fmtflags f = cout.flags();
     auto prec = cout.precision();
+    int nb = 30;
 
     const auto dt = sec_type((last = clock_type::now()) - start).count();
     const int hours   = dt/3600;
@@ -56,17 +56,20 @@ public:
     cnt_ss.imbue(cnt_locale);
     cnt_ss << setw(14) << cnt;
     cout << cnt_ss.rdbuf() << " | ";
-    cout.precision(2);
-    cout << std::fixed << setw(6) << (
-      cnt==cnt_start ? 0. : 100.*float(cnt-cnt_start)/float(cnt_end-cnt_start)
-    ) <<'%'<< " | ";
+    if (cnt_end) {
+      nb += 12;
+      cout.precision(2);
+      cout << std::fixed << setw(6) << (
+        cnt==cnt_start ? 0. : 100.*float(cnt-cnt_start)/float(cnt_end-cnt_start)
+      ) << "% | ";
+    }
     if (hours) {
-      if (nb<38) nb = 38;
+      nb += 8;
       cout << setw(5) << hours << ':'
       << setfill('0') << setw(2) << minutes << ':'
       << setw(2) << seconds << setfill(' ');
     } else if (minutes) {
-      if (nb<32) nb = 32;
+      nb += 2;
       cout << setw(2) << minutes << ':'
       << setfill('0') << setw(2) << seconds << setfill(' ');
     } else if (seconds) {
@@ -104,7 +107,6 @@ public:
     cnt_end = n;
     start = clock_type::now();
     last = start;
-    nb = 30;
   }
   inline void reset(value_type n) { reset(0,n); }
 
