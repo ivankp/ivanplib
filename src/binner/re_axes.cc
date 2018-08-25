@@ -15,6 +15,8 @@ struct re_axes::store: public
 re_axes::re_axes(const std::string& filename): _store(new store) {
 
   std::fstream f(filename);
+  if (f.fail()) throw ivanp::error("Error reading file \"",filename,"\"");
+
   char c; // char buffer
   bool e = false, // expression complete
        l = false, // hit left brace
