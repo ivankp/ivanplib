@@ -15,4 +15,8 @@ struct error : std::runtime_error {
 
 }
 
+inline std::ostream& operator<<(std::ostream& s, const std::exception& e) {
+  return s << "\033[31m" << e.what() << "\033[0m";
+}
+
 #endif
