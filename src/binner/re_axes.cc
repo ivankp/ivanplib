@@ -67,18 +67,23 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
 
         using axis_ptr = ivanp::abstract_axis<double>*;
 
-        _store->emplace_back( std::piecewise_construct,
-          std::make_tuple( std::move(re),
-            std::regex::nosubs | std::regex::extended ),
-          std::make_tuple( u
-            ? static_cast<axis_ptr>(
-                new ivanp::uniform_axis<double,true>(
-                nums[0], nums[1], nums[2]))
-            : static_cast<axis_ptr>(
-                new ivanp::container_axis<std::vector<double>,true>(
-                std::move(nums)))
-          )
-        );
+        try {
+          _store->emplace_back( std::piecewise_construct,
+            std::forward_as_tuple( re,
+              std::regex::nosubs | std::regex::extended ),
+            std::make_tuple( u
+              ? static_cast<axis_ptr>(
+                  new ivanp::uniform_axis<double,true>(
+                  nums[0], nums[1], nums[2]))
+              : static_cast<axis_ptr>(
+                  new ivanp::container_axis<std::vector<double>,true>(
+                  std::move(nums)))
+            )
+          );
+          re.clear();
+        } catch (const std::regex_error& e) {
+          throw ivanp::error(re,' ',e);
+        }
 
         if (u) nums.clear();
 
