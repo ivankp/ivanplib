@@ -56,6 +56,36 @@ template <template<typename> typename Pred, typename... Args>
 using find_first_index
   = typename detail::find_first_index_impl<Pred,0,Args...>::type;
 
+// Index ============================================================
+
+template <typename,typename...> struct type_index;
+template <typename T, typename... Ts>
+struct type_index<T, T, Ts...>: std::integral_constant<size_t, 0> { };
+template <typename T, typename U, typename... Ts>
+struct type_index<T, U, Ts...>
+: std::integral_constant<size_t, 1 + type_index<T, Ts...>::value> { };
+
+namespace detail {
+template <size_t I, typename T> struct indexed { using type = T; };
+template <typename Is, typename ...Ts> struct indexer;
+template <size_t... Is, typename ...Ts>
+struct indexer<std::index_sequence<Is...>, Ts...>: indexed<Is, Ts>... { };
+template <size_t I, typename T>
+static indexed<I, T> select(indexed<I, T>);
+}
+
+template <size_t I, typename... Ts>
+using nth_type = typename decltype(detail::select<I>(
+  detail::indexer<std::index_sequence_for<Ts...>, Ts...>{}
+))::type;
+
+// is_one_of ========================================================
+template <typename...> struct is_one_of: std::false_type { };
+template <typename T1, typename T2, typename... T>
+struct is_one_of<T1, T2, T...>: std::integral_constant<bool,
+  std::is_same<T1,T2>::value || is_one_of<T1,T...>::value
+> { };
+
 }
 
 #endif

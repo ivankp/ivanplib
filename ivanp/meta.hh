@@ -14,6 +14,10 @@ struct add_const_to_ref<T&> { using type = const T&; };
 template <typename T>
 using add_const_to_ref_t = typename add_const_to_ref<T>::type;
 
+template <typename T>
+using decay_ptr_t =
+  std::remove_cv_t< std::remove_pointer_t< std::remove_reference_t< T > > >;
+
 // nothing
 struct nothing { };
 
