@@ -3,6 +3,7 @@
 
 #include <iterator>
 #include <vector>
+#include <stdexcept>
 
 #include "ivanp/detect.hh"
 
@@ -89,6 +90,31 @@ inline std::vector<T>& operator+=(std::vector<T>& v, std::vector<T>&& u) {
     std::make_move_iterator(u.end())
   );
   return v;
+}
+
+namespace ivanp {
+
+template <typename C>
+using container_element_t = std::decay_t<decltype(*std::declval<C>().begin())>;
+
+template <typename C>
+inline auto minmax(C&& c)
+-> std::pair<container_element_t<C>,container_element_t<C>>
+{
+  if (c.begin()==c.end()) throw std::runtime_error(
+    "ivanp::minmax applied to empty container");
+  using type = container_element_t<C>;
+  auto it  = c.begin();
+  std::pair<type,type> m { *it, *it };
+  ++it;
+  for (auto end=c.end(); it!=end; ++it) {
+    const auto& x = *it;
+    if (m.first  > x) m.first  = x;
+    if (m.second < x) m.second = x;
+  }
+  return m;
+}
+
 }
 
 #endif
