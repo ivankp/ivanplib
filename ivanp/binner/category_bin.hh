@@ -19,17 +19,16 @@ struct category_bin {
 
   std::array< bin_type, enum_traits<E>::size > bins;
 
-  inline category_bin& operator()(double w) noexcept {
-    std::get<0>(bins)(w);
-    if (_id) bins[_id](w);
+  template <typename... T>
+  inline category_bin& operator()(T&&... args) noexcept {
+    std::get<0>(bins)(std::forward<T>(args)...);
+    if (_id) bins[_id](std::forward<T>(args)...);
     return *this;
   }
   inline category_bin& operator+=(const category_bin& b) noexcept {
     for (auto i=bins.size(); i; ) --i, bins[i] += b.bins[i];
     return *this;
   }
-  inline bin_type& operator->() noexcept { return bins[_id]; }
-  inline const bin_type& operator->() const noexcept { return bins[_id]; }
 
   template <typename _E>
   inline static std::enable_if_t<std::is_same<_E,E>::value,unsigned>& id() {
