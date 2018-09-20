@@ -15,7 +15,8 @@
 //
 // num : enum class num { one, two, three };
 // enum_traits<num>::type : num
-// enum_traits<num>::size : 3
+// enum_traits<num>::name() : "num"
+// enum_traits<num>::size() : 3
 // enum_traits<num>::all : std::integer_sequence<num,one,two,tree>
 // enum_traits<num>::str(one) : "one"
 // enum_traits<num>::val("one") : num::one
@@ -61,9 +62,12 @@ template <typename Enum> struct enum_traits;
   enum class NAME { BOOST_PP_SEQ_ENUM(VALUES) }; \
   template <> struct enum_traits<NAME> { \
     using type = NAME; \
+    static constexpr const char* name() noexcept { \
+      return BOOST_PP_STRINGIZE(NAME); \
+    } \
     using all = std::integer_sequence<type, \
       PP_SEQ_TRANSFORM_ENUM(PP_PRECEDE_OP, NAME::, VALUES) >; \
-    static constexpr size_t size = all::size(); \
+    static constexpr size_t size() noexcept { return all::size(); } \
     \
     static constexpr const char* str(type val) noexcept { \
       switch (val) { \
@@ -78,11 +82,11 @@ template <typename Enum> struct enum_traits;
         "string cannot be converted to enum \'" #NAME "\'"); \
     } \
     \
-    static constexpr std::array<type,size> all_val() noexcept { \
+    static constexpr std::array<type,all::size()> all_val() noexcept { \
       return { PP_SEQ_TRANSFORM_ENUM(PP_PRECEDE_OP, NAME::, VALUES) }; \
     }; \
     \
-    static constexpr std::array<const char*,size> all_str() noexcept { \
+    static constexpr std::array<const char*,all::size()> all_str() noexcept { \
       return { PP_SEQ_TRANSFORM_ENUM(PP_STRINGIZE_OP, ,VALUES) }; \
     }; \
   }; \

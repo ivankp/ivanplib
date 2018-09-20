@@ -45,7 +45,7 @@ public:
   template <unsigned I>
   using edge_type = typename axis_type<I>::edge_type;
   using container_type = Container;
-  using filler_type = Filler;
+  using filler = Filler;
   using value_type = typename container_type::value_type;
   using size_type = ivanp::axis_size_type;
   static constexpr unsigned naxes = sizeof...(Ax);
@@ -120,10 +120,10 @@ public:
     return nbins_left<naxes-1>();
   }
 
-  constexpr auto begin() const noexcept { return bins.begin(); }
-  constexpr auto begin() noexcept { return bins.begin(); }
-  constexpr auto   end() const noexcept { return bins.end(); }
-  constexpr auto   end() noexcept { return bins.end(); }
+  constexpr auto begin() const noexcept { return _bins.begin(); }
+  constexpr auto begin() noexcept { return _bins.begin(); }
+  constexpr auto   end() const noexcept { return _bins.end(); }
+  constexpr auto   end() noexcept { return _bins.end(); }
 
 private:
   template <size_t I, typename A = axis_spec<I>>
@@ -184,10 +184,10 @@ private:
   ) {
     static_assert(
       ivanp::is_callable<
-        filler_type, decltype(_bins[bin]), decltype(std::get<I>(t))...
+        filler, decltype(_bins[bin]), decltype(std::get<I>(t))...
       >::value,
       "cannot call bin filler for given arguments");
-    filler_type()(_bins[bin], std::get<I>(t)...);
+    filler::fill(_bins[bin], std::get<I>(t)...);
     return bin;
   }
 
@@ -285,7 +285,7 @@ public:
   template <typename... Args>
   inline size_type fill_bin(size_type bin, Args&&... args) {
     // NOT safe for out of range indices
-    filler_type()(_bins[bin], std::forward<Args>(args)...);
+    filler::fill(_bins[bin], std::forward<Args>(args)...);
     return bin;
   }
   template <typename... Args>
