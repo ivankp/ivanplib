@@ -21,14 +21,20 @@ using decay_ptr_t =
 // nothing
 struct nothing { };
 
+#ifndef IVANP_VOID_T_DEFECT
+// void_t
+template <typename...> using void_t = void;
+// subst_t
+template <typename T, typename...> using subst_t = T;
+#else
+// void_t
+template <typename...> struct make_void { using type = void; };
+template <typename... Ts> using void_t = typename make_void<Ts...>::type;
 // subst_t
 template <typename T, typename...> struct make_subst { using type = T; };
 template <typename T, typename... _>
 using subst_t = typename make_subst<T,_...>::type;
-
-// void_t
-template <typename...> struct make_void { using type = void; };
-template <typename... Ts> using void_t = typename make_void<Ts...>::type;
+#endif
 
 // zero
 template <typename T> constexpr T zero(T) { return 0; }
