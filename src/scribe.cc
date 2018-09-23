@@ -6,15 +6,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdexcept>
 
-#include <iostream>
+namespace ivanp { namespace scribe {
 
-namespace ivanp {
-
-#define SCRIBE_THROW(MSG) throw std::runtime_error("scribe_reader: " MSG);
+#define SCRIBE_THROW(MSG) throw std::runtime_error("scribe::reader: " MSG);
 
 // https://www.oreilly.com/library/view/linux-system-programming/0596009585/ch04s03.html
-scribe_reader::scribe_reader(const std::string& filename) {
+reader::reader(const std::string& filename) {
   struct stat sb;
   int fd = ::open(filename.c_str(), O_RDONLY);
   if (fd == -1) SCRIBE_THROW("open");
@@ -25,11 +24,28 @@ scribe_reader::scribe_reader(const std::string& filename) {
   if (m == MAP_FAILED) SCRIBE_THROW("mmap");
   if (::close(fd) == -1) SCRIBE_THROW("close");
 
-  std::cout.write(reinterpret_cast<const char*>(m),m_len);
+  int nbraces = 0;
+  const char * const a0 = reinterpret_cast<const char*>(m), *a = a0;
+  for (;; ++a) {
+    if ((decltype(m_len))(a-a0) >= m_len)
+      SCRIBE_THROW("reached EOF while reading header");
+    const char c = *a;
+    if (c=='{') ++nbraces;
+    else if (c=='}') --nbraces;
+    if (nbraces==0) {
+      head_len = (a-a0)+1;
+      break;
+    }
+    else if (nbraces < 0) SCRIBE_THROW("unpaired \'}\' in header");
+  }
 }
-void scribe_reader::close() {
+void reader::close() {
   if (munmap(m,m_len) == -1) SCRIBE_THROW("munmap");
 }
-scribe_reader::~scribe_reader() { close(); }
+reader::~reader() { close(); }
 
+string_view reader::head() const {
+  return { reinterpret_cast<const char*>(m), head_len };
 }
+
+}}
