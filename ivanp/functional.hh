@@ -10,11 +10,11 @@
 
 namespace ivanp {
 
-template <typename F> class y_combinator_result {
+template <typename F> class _y_combinator {
   F f;
 public:
   template <typename T>
-  y_combinator_result(T&& f): f(std::forward<T>(f)) { }
+  _y_combinator(T&& f): f(std::forward<T>(f)) { }
 
   template <typename... Args>
   decltype(auto) operator()(Args&&... args) const {
@@ -23,9 +23,31 @@ public:
 };
 
 template <typename F>
-y_combinator_result<std::decay_t<F>> y_combinator(F&& f) {
+inline _y_combinator<std::decay_t<F>> y_combinator(F&& f) {
   return { std::forward<F>(f) };
 }
+
+#ifdef __cpp_deduction_guides
+template <typename... F> struct overloaded: F... { using F::operator()...; };
+template <typename... F> overloaded(F...) -> overloaded<F...>;
+#else
+template <typename F, typename... Fs>
+struct _overloaded: F, _overloaded<Fs...> {
+  template <typename T, typename... Ts>
+  _overloaded(T&& f, Ts&&... fs)
+  : F(std::forward<T>(f)), _overloaded<Fs...>(std::forward<Ts>(fs)...) { }
+  using F::operator();
+  using _overloaded<Fs...>::operator();
+};
+template <typename F> struct _overloaded<F>: F {
+  template <typename T> _overloaded(T&& f): F(std::forward<T>(f)) { }
+  using F::operator();
+};
+template <typename... F>
+inline _overloaded<F...> overloaded(F&&... f) {
+  return { std::forward<F>(f)... };
+}
+#endif
 
 }
 

@@ -10,7 +10,7 @@
 #include "ivanp/boolean.hh"
 
 #ifndef __cpp_fold_expressions
-#include "ivanp/expand.hh"
+#include "ivanp/unfold.hh"
 #endif
 
 namespace ivanp {
@@ -65,7 +65,7 @@ constexpr auto impl(T&& t, F&& f, std::index_sequence<I...>)
   (std::invoke(
     std::forward<F>(f), std::get<I>(std::forward<T>(t)) ),...);
 #else
-  EXPAND( std::forward<F>(f)(std::get<I>(std::forward<T>(t))) )
+  UNFOLD( std::forward<F>(f)(std::get<I>(std::forward<T>(t))) )
 #endif
   return std::forward<T>(t);
 }

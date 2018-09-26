@@ -1,43 +1,37 @@
 #ifndef IVANP_SCRIBE_HH
 #define IVANP_SCRIBE_HH
 
+#include <cstdint>
 #include <type_traits>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <array>
 #include <tuple>
-#include <unordered_map>
-#include <cstdint>
+#include <map>
+
 #include "ivanp/meta.hh"
 
-#if __has_include
-#  if __has_include(<string_view>)
-#    define IVANP_SCRIBE_STRING_VIEW_STD
-#  elif __has_include(<boost/string_view.hpp>)
-#    define IVANP_SCRIBE_STRING_VIEW_BOOST
-#  else
-#    define IVANP_SCRIBE_STRING_VIEW_NONE
-#  endif
+#ifdef __cpp_lib_variant
+#include <string_view>
+namespace ivanp { namespace scribe { using std::string_view; }}
 #else
-#  define IVANP_SCRIBE_STRING_VIEW_NONE
+#include <boost/utility/string_view.hpp>
+namespace ivanp { namespace scribe { using boost::string_view; }}
 #endif
 
-#ifdef IVANP_SCRIBE_STRING_VIEW_STD
-#include <string_view>
-namespace ivanp { namespace scribe { using string_view = std::string_view; }}
-#elif defined(IVANP_SCRIBE_STRING_VIEW_BOOST)
-#include <boost/string_view.hpp>
-namespace ivanp { namespace scribe { using string_view = boost::string_view; }}
+#ifdef __cpp_lib_variant
+#include <variant>
+namespace ivanp { namespace scribe { using std::variant; }}
 #else
-namespace ivanp { namespace scribe { using string_view = std::string; }}
+#include <boost/variant.hpp>
+namespace ivanp { namespace scribe { using boost::variant; }}
 #endif
 
 namespace ivanp {
 namespace scribe {
 
-using type_map = std::unordered_map<std::string,std::string>;
+using writer_type_map = std::map<std::string,std::string,std::less<>>;
 using size_type = uint32_t;
 
 template <typename T, typename SFINAE=void>
@@ -48,7 +42,7 @@ struct trait<T,std::enable_if_t<std::is_arithmetic<T>::value>> {
   static void write_value(std::ostream& o, const T& x) {
     o.write(reinterpret_cast<const char*>(&x), sizeof(x));
   }
-  static void write_type_def(type_map& m) { }
+  static void write_type_def(writer_type_map& m) { }
   static std::string type_name() {
     return (std::is_floating_point<T>::value ? "f" :
         (std::is_signed<T>::value ? "i" : "u")
@@ -64,7 +58,7 @@ struct trait<T, void_t<
   using value_type = std::decay_t<decltype(*std::declval<T>().begin())>;
   using value_trate = trait<value_type>;
 
-  static std::string type_name() { return value_trate::type_name()+"[]"; }
+  static std::string type_name() { return value_trate::type_name()+"#"; }
   static void write_value(std::ostream& o, const T& x) {
     const auto _begin = begin(x);
     const auto _end   = end  (x);
@@ -72,23 +66,23 @@ struct trait<T, void_t<
     o.write(reinterpret_cast<const char*>(&n), sizeof(n));
     for (auto it=_begin; it!=_end; ++it) value_trate::write_value(o,*it);
   }
-  static void write_type_def(type_map& m) {
+  static void write_type_def(writer_type_map& m) {
     value_trate::write_type_def(m);
   }
 };
 
 template <typename T, std::size_t N>
-struct trait<std::array<T,N>,void> {
+struct trait<std::array<T,N>> {
   using value_type = std::decay_t<T>;
   using value_trate = trait<value_type>;
 
   static std::string type_name() {
-    return value_trate::type_name()+"["+std::to_string(N)+"]";
+    return value_trate::type_name()+"#"+std::to_string(N);
   }
   static void write_value(std::ostream& o, const std::array<T,N>& x) {
     for (const auto& e : x) value_trate::write_value(o,e);
   }
-  static void write_type_def(type_map& m) {
+  static void write_type_def(writer_type_map& m) {
     value_trate::write_type_def(m);
   }
 };
@@ -97,69 +91,65 @@ class writer {
   std::string file_name;
   std::stringstream o;
   std::vector<std::tuple<std::string,std::string>> root;
-  type_map type_defs;
+  writer_type_map types;
 public:
   writer(const std::string& filename): file_name(filename) { }
   writer(std::string&& filename): file_name(std::move(filename)) { }
-  ~writer() { close(); }
+  ~writer() { write(); }
 
   template <typename T, typename S>
   writer& write(S&& name, const T& x) {
     using trait = trait<T>;
     root.emplace_back( trait::type_name(), std::forward<S>(name) );
-    if (type_defs.find(std::get<0>(root.back()))==type_defs.end())
-      trait::write_type_def(type_defs);
+    if (types.find(std::get<0>(root.back()))==types.end())
+      trait::write_type_def(types);
     trait::write_value(o,x);
     return *this;
   }
 
-  void close() {
-    if (file_name.empty()) throw std::runtime_error(
-      "writer is not in a valid state");
-    std::ofstream f(file_name,std::ios::binary);
-    file_name.clear(); // erase
+  void write();
+};
 
-    f << "{";
-    { f << "\"root\":[";
-      const auto begin = root.begin();
-      const auto end   = root.end  ();
-      for (auto it=begin; ; ) {
-        f << (it!=begin ? ",[" : "[")
-          << "\"" << std::get<0>(*it) << "\","
-             "\"" << std::get<1>(*it) << "\"";
-        if ((++it)==end) { f << "]"; break; }
-        for ( ; std::get<0>(*it)==std::get<0>(*std::prev(it)); ++it) {
-          f << ",\"" << std::get<1>(*it) << "\"";
-        }
-        f << "]";
-      }
-      f << "],";
-    }
-    { f << "\"types\":{";
-      const auto begin = type_defs.begin();
-      const auto end   = type_defs.end  ();
-      for (auto it=begin; it!=end; ++it) {
-        f << (it!=begin ? ",\"" : "\"") << it->first << "\":" << it->second;
-      }
-      f << "}";
-    }
-    f << "}";
+class reader;
 
-    f << o.rdbuf();
-    o.str({}); // erase
-    o.clear(); // clear errors
+struct type_node {
+  char* p;
+  type_node(): p(nullptr) { }
+  type_node(
+    size_t memlen, size_t size, bool is_array,
+    const char* name, size_t name_len
+  );
+  void clean();
+  size_t memlen() const { return *reinterpret_cast<size_t*>(p); }
+  // void set_memlen(size_t);
+  uint8_t n_children() const {
+    return *reinterpret_cast<uint8_t*>( p + sizeof(size_t) );
   }
+  type_node* begin() {
+    return reinterpret_cast<type_node*>( p + sizeof(size_t)+sizeof(uint8_t) );
+  }
+  type_node* end() { return begin() + n_children(); }
+  type_node operator[](uint8_t i) { return *(begin()+i); }
+  const char* name() { return reinterpret_cast<const char*>( end() ); }
 };
 
 class reader {
   void* m;
   size_t m_len, head_len;
+  std::vector<type_node> types;
+  auto root() const { return types.back(); }
 public:
-  reader(const std::string& filename);
+  reader(const char* filename);
+  reader(const std::string& filename): reader(filename.c_str()) { }
   ~reader();
   void close();
 
   string_view head() const;
+
+  template <typename... Ts>
+  void* get(const Ts&... xs) {
+    return nullptr;
+  }
 };
 
 }}

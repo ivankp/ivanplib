@@ -4,14 +4,14 @@
 #include <string>
 #include <sstream>
 #include <cstring>
-#include "ivanp/expand.hh"
+#include "ivanp/unfold.hh"
 
 namespace ivanp {
 
 template <typename... T>
 inline std::string cat(T&&... x) {
   std::stringstream ss;
-  EXPAND(ss << std::forward<T>(x))
+  UNFOLD(ss << std::forward<T>(x))
   return ss.str();
 }
 inline std::string cat() { return { }; }
