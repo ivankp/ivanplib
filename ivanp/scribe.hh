@@ -11,6 +11,9 @@
 #include <map>
 
 #include "ivanp/meta.hh"
+#include "ivanp/unfold.hh"
+#include "ivanp/detect.hh"
+#include "ivanp/boolean.hh"
 
 #ifdef __cpp_lib_variant
 #include <string_view>
@@ -20,13 +23,13 @@ namespace ivanp { namespace scribe { using std::string_view; }}
 namespace ivanp { namespace scribe { using boost::string_view; }}
 #endif
 
-#ifdef __cpp_lib_variant
-#include <variant>
-namespace ivanp { namespace scribe { using std::variant; }}
-#else
-#include <boost/variant.hpp>
-namespace ivanp { namespace scribe { using boost::variant; }}
-#endif
+// #ifdef __cpp_lib_variant
+// #include <variant>
+// namespace ivanp { namespace scribe { using std::variant; }}
+// #else
+// #include <boost/variant.hpp>
+// namespace ivanp { namespace scribe { using boost::variant; }}
+// #endif
 
 namespace ivanp {
 namespace scribe {
@@ -42,7 +45,6 @@ struct trait<T,std::enable_if_t<std::is_arithmetic<T>::value>> {
   static void write_value(std::ostream& o, const T& x) {
     o.write(reinterpret_cast<const char*>(&x), sizeof(x));
   }
-  static void write_type_def(writer_type_map& m) { }
   static std::string type_name() {
     return (std::is_floating_point<T>::value ? "f" :
         (std::is_signed<T>::value ? "i" : "u")
@@ -50,11 +52,46 @@ struct trait<T,std::enable_if_t<std::is_arithmetic<T>::value>> {
   }
 };
 
+template <>
+struct trait<const char*> {
+  using value_type = char;
+  using value_trate = trait<value_type>;
+  static std::string type_name() { return value_trate::type_name()+"#"; }
+  static void write_value(std::ostream&, const char*);
+};
+
+template <typename T, size_type N>
+struct trait<T[N]> {
+  using value_type = T;
+  using value_trate = trait<value_type>;
+  static std::string type_name() {
+    return value_trate::type_name()+"#"+std::to_string(N);
+  }
+  static void write_value(std::ostream& o, const T* x) {
+    const size_type n = N;
+    o.write(reinterpret_cast<const char*>(&n), sizeof(n));
+    for (size_type i=0; i<N; ++i) value_trate::write_value(o,x[i]);
+  }
+};
+
+template <typename T> using begin_t = decltype(begin(std::declval<T>()));
+template <typename T> using   end_t = decltype(end  (std::declval<T>()));
 template <typename T>
-struct trait<T, void_t<
-  decltype(begin(std::declval<T&>())),
-  decltype(end  (std::declval<T&>()))
->> {
+using is_container = ivanp::conjunction<
+  ivanp::is_detected<begin_t,T>,
+  ivanp::is_detected<  end_t,T>
+>;
+template <typename T>
+using tuple_size_value_t = decltype(std::tuple_size<T>::value);
+template <typename T>
+using is_tuple = ivanp::bool_constant<
+  ivanp::is_detected<tuple_size_value_t,T>::value
+>;
+
+template <typename T>
+struct trait<T, void_t<std::enable_if_t<
+  is_container<T>::value && !is_tuple<T>::value
+>>> {
   using value_type = std::decay_t<decltype(*std::declval<T>().begin())>;
   using value_trate = trait<value_type>;
 
@@ -65,9 +102,6 @@ struct trait<T, void_t<
     const size_type n = std::distance(_begin,_end);
     o.write(reinterpret_cast<const char*>(&n), sizeof(n));
     for (auto it=_begin; it!=_end; ++it) value_trate::write_value(o,*it);
-  }
-  static void write_type_def(writer_type_map& m) {
-    value_trate::write_type_def(m);
   }
 };
 
@@ -82,8 +116,28 @@ struct trait<std::array<T,N>> {
   static void write_value(std::ostream& o, const std::array<T,N>& x) {
     for (const auto& e : x) value_trate::write_value(o,e);
   }
-  static void write_type_def(writer_type_map& m) {
-    value_trate::write_type_def(m);
+};
+
+template <typename T>
+struct trait<T, void_t<std::enable_if_t<is_tuple<T>::value>>> {
+  template <size_t I> using value_trait = trait<std::tuple_element_t<I,T>>;
+  template <size_t... I> using _seq = std::index_sequence<I...>;
+  using seq = std::make_index_sequence<std::tuple_size<T>::value>;
+
+  template <size_t... I>
+  static std::string _type_name(_seq<I...>) {
+    std::ostringstream s;
+    UNFOLD(( s << '(' << value_trait<I>::type_name() << ')' ))
+    return s.str();
+  }
+  template <size_t... I>
+  static void _write_value(std::ostream& o, const T& x, _seq<I...>) {
+    UNFOLD( value_trait<I>::write_value(o,std::get<I>(x)) )
+  }
+
+  static std::string type_name() { return _type_name(seq{}); }
+  static void write_value(std::ostream& o, const T& x) {
+    _write_value(o,x,seq{});
   }
 };
 
@@ -99,11 +153,8 @@ public:
 
   template <typename T, typename S>
   writer& write(S&& name, const T& x) {
-    using trait = trait<T>;
-    root.emplace_back( trait::type_name(), std::forward<S>(name) );
-    if (types.find(std::get<0>(root.back()))==types.end())
-      trait::write_type_def(types);
-    trait::write_value(o,x);
+    root.emplace_back( trait<T>::type_name(), std::forward<S>(name) );
+    trait<T>::write_value(o,x);
     return *this;
   }
 

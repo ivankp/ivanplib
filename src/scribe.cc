@@ -19,7 +19,6 @@
 #include <nlohmann/json.hpp>
 
 #include "ivanp/functional.hh"
-#include "ivanp/unfold.hh"
 
 using std::cout;
 using std::endl;
@@ -67,6 +66,12 @@ void writer::write() {
   f << o.rdbuf();
   o.str({}); // erase
   o.clear(); // clear errors
+}
+
+void trait<const char*>::write_value(std::ostream& o, const char* s) {
+  const size_type n = strlen(s);
+  o.write(reinterpret_cast<const char*>(&n), sizeof(n));
+  for (size_type i=0; i<n; ++i) value_trate::write_value(o,s[i]);
 }
 
 #undef THROW
