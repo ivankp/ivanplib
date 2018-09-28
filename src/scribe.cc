@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ivanp/functional.hh"
+#include "ivanp/error.hh"
 
 using std::cout;
 using std::endl;
@@ -29,8 +30,8 @@ using boost::lexical_cast;
 
 namespace ivanp { namespace scribe {
 
-struct error: std::runtime_error {
-  using std::runtime_error::runtime_error;
+struct error: ivanp::error {
+  using ivanp::error::error;
 };
 
 void writer::write() {
@@ -76,6 +77,17 @@ void trait<const char*>::write_value(std::ostream& o, const char* s) {
   o.write(s,n);
 }
 
+template <typename T, typename F>
+size_t memlen_sum(const T& xs, F f) {
+  size_t sum = 0;
+  for (const auto& x : xs) {
+    const size_t memlen = f(x).memlen();
+    if (memlen) sum += memlen;
+    else return 0;
+  }
+  return sum;
+}
+
 // https://www.oreilly.com/library/view/linux-system-programming/0596009585/ch04s03.html
 reader::reader(const char* filename) {
   struct stat sb;
@@ -116,6 +128,7 @@ reader::reader(const char* filename) {
     ) -> type_node {
       if (begin==end) throw error("blank type name");
       const string_view name(begin,end-begin);
+      TEST(name)
       auto type_it = _types.find(name);
       if (type_it!=_types.end()) return type_it->second;
       auto s = end;
@@ -128,28 +141,44 @@ reader::reader(const char* filename) {
         if (end-s>1) size = lexical_cast<size_t>(s+1,size_len);
         type_node subtype = f(begin,s);
         type = { subtype.memlen()*size, size, true, name };
-        std::get<1>(*type.begin()) = subtype;
+        type.begin()->type = subtype;
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) { // fundamental
         type = { lexical_cast<size_t>(s+1,size_len), 0, false, name };
+      } else if (end-s==1 && [begin,end](){
+          if (*begin!='(' || *(end-1)!=')') return false;
+          int cnt = 0, prev_cnt = 0;
+          for (auto s=begin; s!=end; ++s) {
+            prev_cnt = cnt;
+            if (*s=='(') ++cnt; else if (*s==')') --cnt;
+            if (cnt==0 && prev_cnt==0) return false;
+          }
+          return !cnt;
+        }()
+      ) {
+        std::vector<type_node> subtypes;
+        int cnt = 0;
+        auto a = begin+1;
+        for (auto s=begin; s!=end; ++s) {
+          if (*s=='(') ++cnt; else if (*s==')') --cnt;
+          if (!cnt) subtypes.push_back(f(a,s)), a = s+2;
+        }
+        type = {
+          memlen_sum(subtypes,[](const auto& x){ return x; }),
+          subtypes.size(), false, name };
+        std::transform(subtypes.begin(),subtypes.end(),type.begin(),
+          [](auto x) -> type_node::child_t { return { x, { } }; });
       } else { // user defined type
-        throw error("bad type name");
+        throw error("bad type name \"",name,'\"');
       }
       return _types.emplace(name,type).first->second;
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it) {
-      root_types.emplace_back(val_it->get<std::string>(),type);
+      root_types.push_back({type,val_it->get<std::string>()});
     }
   }
-  size_t root_memlen = 0;
-  for (const auto& type : root_types) {
-    const size_t memlen = std::get<1>(type).memlen();
-    if (memlen) root_memlen += memlen;
-    else {
-      root_memlen = 0;
-      break;
-    }
-  }
-  type_node root_type(root_memlen,root_types.size(),false,{});
+  type_node root_type(
+    memlen_sum(root_types,[](const auto& x){ return x.type; }),
+    root_types.size(),false,{});
   std::move(root_types.begin(),root_types.end(),root_type.begin());
   all_types.reserve(_types.size()+1);
   all_types.emplace_back(root_type);
@@ -180,7 +209,7 @@ void reader::print_types() const {
          << type.num_children() << '>'
          << endl;
     for (const auto& sub : type)
-      cout <<"  "<< std::get<1>(sub).name() << " " << std::get<0>(sub) << endl;
+      cout <<"  "<< sub.type.name() << " " << sub.name << endl;
   }
 }
 
@@ -201,7 +230,7 @@ type_node::type_node(
 ]){
   child_t* _p = reinterpret_cast<child_t*>(memcpy_pack(p,memlen,size,is_array));
   for (child_t* end=_p+(is_array?1:size); _p!=end; ++_p) new(_p) child_t();
-  if (is_array) std::get<0>(*(_p-1)) = { "\0", 1 };
+  if (is_array) (_p-1)->name = { "\0", 1 };
   memcpy(_p,name.data(),name.size());
   *(reinterpret_cast<char*>(_p)+name.size()) = '\0';
 }

@@ -163,7 +163,7 @@ class reader;
 
 struct type_node {
   char* p;
-  using child_t = std::tuple<std::string,type_node>;
+  struct child_t;
   type_node(): p(nullptr) { }
   type_node(
     size_t memlen, size_t size, bool is_array, string_view name
@@ -178,6 +178,11 @@ struct type_node {
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;
+};
+struct type_node::child_t {
+  type_node type;
+  std::string name;
+  type_node operator->() const { return type; }
 };
 
 class reader {
