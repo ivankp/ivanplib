@@ -29,10 +29,12 @@ using boost::lexical_cast;
 
 namespace ivanp { namespace scribe {
 
-#define THROW(MSG) throw std::runtime_error("scribe::writer: " MSG);
+struct error: std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
 
 void writer::write() {
-  if (file_name.empty()) THROW("invalid state");
+  if (file_name.empty()) throw error("invalid state");
   std::ofstream f(file_name,std::ios::binary);
   file_name.clear(); // erase
 
@@ -74,26 +76,23 @@ void trait<const char*>::write_value(std::ostream& o, const char* s) {
   o.write(s,n);
 }
 
-#undef THROW
-#define THROW(MSG) throw std::runtime_error("scribe::reader: " MSG);
-
 // https://www.oreilly.com/library/view/linux-system-programming/0596009585/ch04s03.html
 reader::reader(const char* filename) {
   struct stat sb;
   int fd = ::open(filename, O_RDONLY);
-  if (fd == -1) THROW("open");
-  if (::fstat(fd, &sb) == -1) THROW("fstat");
-  if (!S_ISREG(sb.st_mode)) THROW("not a file");
+  if (fd == -1) throw error("open");
+  if (::fstat(fd, &sb) == -1) throw error("fstat");
+  if (!S_ISREG(sb.st_mode)) throw error("not a file");
   m_len = sb.st_size;
   m = mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0);
-  if (m == MAP_FAILED) THROW("mmap");
-  if (::close(fd) == -1) THROW("close");
+  if (m == MAP_FAILED) throw error("mmap");
+  if (::close(fd) == -1) throw error("close");
 
   int nbraces = 0;
   const char * const a0 = reinterpret_cast<const char*>(m), *a = a0;
   for (;;) {
     if ((decltype(m_len))(a-a0) >= m_len)
-      THROW("reached EOF while reading header");
+      throw error("reached EOF while reading header");
     const char c = *a;
     if (c=='{') ++nbraces;
     else if (c=='}') --nbraces;
@@ -102,7 +101,7 @@ reader::reader(const char* filename) {
       head_len = (a-a0);
       break;
     }
-    else if (nbraces < 0) THROW("unpaired \'}\' in header");
+    else if (nbraces < 0) throw error("unpaired \'}\' in header");
   }
 
   const auto head = nlohmann::json::parse(a0,a);
@@ -115,7 +114,7 @@ reader::reader(const char* filename) {
     const type_node type = y_combinator([&_types](
       auto f, const char* begin, const char* end
     ) -> type_node {
-      if (begin==end) THROW("blank type name");
+      if (begin==end) throw error("blank type name");
       const string_view name(begin,end-begin);
       auto type_it = _types.find(name);
       if (type_it!=_types.end()) return type_it->second;
@@ -133,6 +132,7 @@ reader::reader(const char* filename) {
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) { // fundamental
         type = { lexical_cast<size_t>(s+1,size_len), 0, false, name };
       } else { // user defined type
+        throw error("bad type name");
       }
       return _types.emplace(name,type).first->second;
     })(name.c_str(), name.c_str()+name.size());
@@ -158,7 +158,7 @@ reader::reader(const char* filename) {
 
 void reader::close() {
   for (auto& type : all_types) type.clean();
-  if (munmap(m,m_len) == -1) THROW("munmap");
+  if (munmap(m,m_len) == -1) throw error("munmap");
 }
 reader::~reader() {
   try {
