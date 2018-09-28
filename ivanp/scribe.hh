@@ -114,30 +114,28 @@ class reader;
 
 struct type_node {
   char* p;
+  using child_t = std::tuple<std::string,type_node>;
   type_node(): p(nullptr) { }
   type_node(
-    size_t memlen, size_t size, bool is_array,
-    const char* name, size_t name_len
+    size_t memlen, size_t size, bool is_array, string_view name
   );
   void clean();
-  size_t memlen() const { return *reinterpret_cast<size_t*>(p); }
-  // void set_memlen(size_t);
-  uint8_t n_children() const {
-    return *reinterpret_cast<uint8_t*>( p + sizeof(size_t) );
-  }
-  type_node* begin() {
-    return reinterpret_cast<type_node*>( p + sizeof(size_t)+sizeof(uint8_t) );
-  }
-  type_node* end() { return begin() + n_children(); }
-  type_node operator[](uint8_t i) { return *(begin()+i); }
-  const char* name() { return reinterpret_cast<const char*>( end() ); }
+  size_t memlen() const;
+  size_t size() const;
+  bool is_array() const;
+  size_t num_children() const;
+  child_t* begin();
+  child_t* end();
+  const child_t* begin() const;
+  const child_t* end() const;
+  const char* name() const;
 };
 
 class reader {
   void* m;
   size_t m_len, head_len;
-  std::vector<type_node> types;
-  auto root() const { return types.back(); }
+  std::vector<type_node> all_types;
+  type_node root() const { return all_types.front(); }
 public:
   reader(const char* filename);
   reader(const std::string& filename): reader(filename.c_str()) { }
@@ -145,6 +143,8 @@ public:
   void close();
 
   string_view head() const;
+
+  void print_types() const;
 
   template <typename... Ts>
   void* get(const Ts&... xs) {

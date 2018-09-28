@@ -9,8 +9,10 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
+#include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <algorithm>
 
 #include <boost/lexical_cast.hpp>
 
@@ -19,9 +21,10 @@
 #include "ivanp/functional.hh"
 #include "ivanp/unfold.hh"
 
+using std::cout;
+using std::endl;
 using boost::lexical_cast;
 
-#include <iostream>
 #define TEST(var) \
   std::cout << "\033[36m" #var "\033[0m = " << var << std::endl;
 
@@ -59,22 +62,6 @@ void writer::write() {
     }
     f << "}";
   }
-  // if (!types.empty()) {
-  //   f << ",\"types\":{";
-  //   bool first = true;
-  //   for (const auto& type : types) {
-  //     if (first) first = false;
-  //     else f << ',';
-  //     f << '\"' << type.first << "\":[";
-  //     bool first = true;
-  //     for (const auto& member : type.second) {
-  //       if (first) first = false;
-  //       else f << ',';
-  //       f << '\"' << member << '\"';
-  //     }
-  //   }
-  //   f << '}';
-  // }
   f << '}';
 
   f << o.rdbuf();
@@ -113,60 +100,9 @@ reader::reader(const char* filename) {
     else if (nbraces < 0) THROW("unpaired \'}\' in header");
   }
 
-  /*
-  std::vector<node> root_nodes(end-it);
-  for (const auto& x : _head["root"]) {
-    auto it = x.begin();
-    const auto end = x.end();
-    const std::string type = *it;
-    ++it;
-    for (; it!=end; ++it) {
-      y_combinator([&it](auto f, const std::string& type, auto& n) -> void {
-        if (type.back()=='#') {
-          const auto subtype = type.substr(0,type.size()-1);
-          node _n { std::vector<node>{}, subtype };
-          visit(ivanp::overloaded(
-            [&](std::map<std::string,node>& n){
-              f(subtype,*n.emplace(*it,std::move(_n)).first);
-            },
-            [&](std::vector<node>& n){
-              n.emplace_back(std::move(_n));
-              f(subtype,n.back());
-            }
-          ),n);
-        }
-      })(type,_root);
-    }
-  }
-  */
-  /*
-  auto& root_type = types.emplace().first->second;
-  for (const auto& x : _head["root"]) {
-    auto it = x.begin();
-    const auto end = x.end();
-    const std::string type = *it;
-    size_t sz = 0;
-    const char t0 = type[0];
-    if ((t0=='i' || t0=='u' || t0=='f') && std::isdigit(type[1])) {
-      bool all_digits = true;
-      for (unsigned i=2; i<type.size(); ++i) {
-        if (!std::isdigit(type[i])) {
-          all_digits = false;
-          break;
-        }
-      }
-      if (all_digits) sz = atoi(type.c_str()+1);
-    }
-    root_type.reserve(end-(++it));
-    for (; it!=end; ++it) {
-      root_type.push_back({it->get<std::string>(), type, sz});
-    }
-  }
-  */
   const auto head = nlohmann::json::parse(a0,a);
-  // {"root":[["i1##","str1","str2","str3"],["i1##2","str4"],["f8","pi"],["u4","3u"]]}
   std::map<std::string,type_node,std::less<>> _types;
-  std::vector<std::tuple<std::string,type_node>> root_types;
+  std::vector<type_node::child_t> root_types;
   for (const auto& val : head["root"]) {
     auto val_it = val.begin();
     const auto val_end = val.end();
@@ -175,22 +111,22 @@ reader::reader(const char* filename) {
       auto f, const char* begin, const char* end
     ) -> type_node {
       if (begin==end) THROW("blank type name");
-      const size_t name_len = end-begin;
-      const string_view name(begin,name_len);
+      const string_view name(begin,end-begin);
       auto type_it = _types.find(name);
       if (type_it!=_types.end()) return type_it->second;
       auto s = end;
       while (s!=begin && std::isdigit(*--s)) ;
       const char c = *s;
-      const auto size_len = end - s -1;
+      const auto size_len = end-s-1;
       type_node type;
       if (c=='#') { // array
         size_t size = 0; // array length
         if (end-s>1) size = lexical_cast<size_t>(s+1,size_len);
-        type_node subtype = f(begin,s-1);
-        type = { subtype.memlen()*size, size, 1, begin, name_len };
+        type_node subtype = f(begin,s);
+        type = { subtype.memlen()*size, size, true, name };
+        std::get<1>(*type.begin()) = subtype;
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) { // fundamental
-        type = { lexical_cast<size_t>(s+1,size_len), 0, 0, begin, name_len };
+        type = { lexical_cast<size_t>(s+1,size_len), 0, false, name };
       } else { // user defined type
       }
       // return _types.emplace(
@@ -203,18 +139,48 @@ reader::reader(const char* filename) {
       root_types.emplace_back(val_it->get<std::string>(),type);
     }
   }
+  size_t root_memlen = 0;
+  for (const auto& type : root_types) {
+    const size_t memlen = std::get<1>(type).memlen();
+    if (memlen) root_memlen += memlen;
+    else {
+      root_memlen = 0;
+      break;
+    }
+  }
+  type_node root_type(root_memlen,root_types.size(),false,{});
+  std::move(root_types.begin(),root_types.end(),root_type.begin());
+  all_types.reserve(_types.size()+1);
+  all_types.emplace_back(root_type);
+  for (const auto& type : _types) all_types.emplace_back(type.second);
 }
 
 void reader::close() {
+  for (auto& type : all_types) type.clean();
   if (munmap(m,m_len) == -1) THROW("munmap");
 }
 reader::~reader() {
-  close();
-  for (auto type : types) type.clean();
+  try {
+    close();
+  } catch (const std::exception& e) {
+    std::cerr << "Exception in ~reader(): " << e.what() << std::endl;
+  }
 }
 
 string_view reader::head() const {
   return { reinterpret_cast<const char*>(m), head_len };
+}
+
+void reader::print_types() const {
+  for (const auto& type : all_types) {
+    cout << type.name() << " <"
+         << type.memlen() << ','
+         << type.size() << ','
+         << type.num_children() << '>'
+         << endl;
+    for (const auto& sub : type)
+      cout <<"  "<< std::get<1>(sub).name() << " " << std::get<0>(sub) << endl;
+  }
 }
 
 template <typename... Ts>
@@ -224,24 +190,62 @@ inline char* memcpy_pack(char* p, const Ts&... xs) {
 }
 
 type_node::type_node(
-  size_t memlen, size_t size, bool is_array,
-  const char* name, size_t name_len
+  size_t memlen, size_t size, bool is_array, string_view name
 ): p(new char[
       sizeof(memlen) // memlen
     + sizeof(size) // number of elements
-    + sizeof(is_array) // is array
-    + ( is_array
-        ? sizeof(type_node)
-        : size*(sizeof(type_node)+sizeof(char*)) ) // children
-    + name_len+1  // name
+    + sizeof(is_array)
+    + (is_array?1:size)*sizeof(child_t) // children
+    + name.size()+1  // name
 ]){
-  char* _p = memcpy_pack(p,memlen,size,is_array);
-  if (is_array) _p += sizeof(type_node);
-  else _p += size*(sizeof(type_node)+sizeof(char*));
-  memcpy(_p,name,name_len);
-  *(_p+name_len) = '\0';
+  child_t* _p = reinterpret_cast<child_t*>(memcpy_pack(p,memlen,size,is_array));
+  for (child_t* end=_p+(is_array?1:size); _p!=end; ++_p) new(_p) child_t();
+  if (is_array) std::get<0>(*(_p-1)) = { "\0", 1 };
+  memcpy(_p,name.data(),name.size());
+  *(reinterpret_cast<char*>(_p)+name.size()) = '\0';
+  // TEST(name)
+  // TEST(size)
+  // TEST(num_children())
+  // TEST(reinterpret_cast<char*>(_p))
+  // TEST(this->name())
+  // TEST(reinterpret_cast<const void*>(_p))
+  // TEST(reinterpret_cast<const void*>(this->name()))
 }
-void type_node::clean() { delete[] p; }
-// void type_node::set_memlen(size_t len) { memcpy(p,&len,sizeof(len)); }
+void type_node::clean() {
+  for (auto& child : *this) child.~child_t();
+  delete[] p;
+}
+size_t type_node::memlen() const {
+  return *reinterpret_cast<size_t*>(p);
+}
+size_t type_node::size() const {
+  return *reinterpret_cast<size_t*>(p + sizeof(size_t));
+}
+bool type_node::is_array() const {
+  return *reinterpret_cast<bool*>(p + sizeof(size_t) + sizeof(size_t));
+}
+size_t type_node::num_children() const {
+  return is_array() ? 1 : size();
+}
+type_node::child_t* type_node::begin() {
+  return reinterpret_cast<child_t*>(
+    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool));
+}
+const type_node::child_t* type_node::begin() const {
+  return reinterpret_cast<child_t*>(
+    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool));
+}
+type_node::child_t* type_node::end() {
+  return begin() + num_children();
+}
+const type_node::child_t* type_node::end() const {
+  return begin() + num_children();
+}
+const char* type_node::name() const {
+  return reinterpret_cast<const char*>(
+    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool)
+      + num_children()*sizeof(child_t)
+  );
+}
 
 }}
