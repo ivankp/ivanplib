@@ -54,9 +54,7 @@ struct trait<T,std::enable_if_t<std::is_arithmetic<T>::value>> {
 
 template <>
 struct trait<const char*> {
-  using value_type = char;
-  using value_trate = trait<value_type>;
-  static std::string type_name() { return value_trate::type_name()+"#"; }
+  static std::string type_name() { return trait<char>::type_name()+"#"; }
   static void write_value(std::ostream&, const char*);
 };
 

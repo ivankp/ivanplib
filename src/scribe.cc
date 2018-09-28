@@ -71,7 +71,7 @@ void writer::write() {
 void trait<const char*>::write_value(std::ostream& o, const char* s) {
   const size_type n = strlen(s);
   o.write(reinterpret_cast<const char*>(&n), sizeof(n));
-  for (size_type i=0; i<n; ++i) value_trate::write_value(o,s[i]);
+  o.write(s,n);
 }
 
 #undef THROW
@@ -134,10 +134,6 @@ reader::reader(const char* filename) {
         type = { lexical_cast<size_t>(s+1,size_len), 0, false, name };
       } else { // user defined type
       }
-      // return _types.emplace(
-      //   std::piecewise_construct,
-      //   std::forward_as_tuple(name),
-      //   std::forward_as_tuple(type)
       return _types.emplace(name,type).first->second;
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it) {
@@ -208,13 +204,6 @@ type_node::type_node(
   if (is_array) std::get<0>(*(_p-1)) = { "\0", 1 };
   memcpy(_p,name.data(),name.size());
   *(reinterpret_cast<char*>(_p)+name.size()) = '\0';
-  // TEST(name)
-  // TEST(size)
-  // TEST(num_children())
-  // TEST(reinterpret_cast<char*>(_p))
-  // TEST(this->name())
-  // TEST(reinterpret_cast<const void*>(_p))
-  // TEST(reinterpret_cast<const void*>(this->name()))
 }
 void type_node::clean() {
   for (auto& child : *this) child.~child_t();
