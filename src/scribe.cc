@@ -60,7 +60,8 @@ void writer::write() {
     const auto begin = types.begin();
     const auto end   = types.end  ();
     for (auto it=begin; it!=end; ++it) {
-      f << (it!=begin ? ",\"" : "\"") << it->first << "\":" << it->second;
+      f << (it!=begin ? ",\"" : "\"") << it->first << "\":["
+        << it->second << ']';
     }
     f << "}";
   }
@@ -119,11 +120,11 @@ reader::reader(const char* filename) {
   const auto head = nlohmann::json::parse(a0,a);
   std::map<std::string,type_node,std::less<>> _types;
   std::vector<type_node::child_t> root_types;
-  for (const auto& val : head["root"]) {
+  for (const auto& val : head.at("root")) {
     auto val_it = val.begin();
     const auto val_end = val.end();
     const std::string name = *val_it;
-    const type_node type = y_combinator([&_types](
+    const type_node type = y_combinator([&_types,&head](
       auto f, const char* begin, const char* end
     ) -> type_node {
       if (begin==end) throw error("blank type name");
@@ -168,13 +169,30 @@ reader::reader(const char* filename) {
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
       } else { // user defined type
-        throw error("bad type name \"",name,'\"');
+        std::vector<type_node::child_t> subtypes;
+        for (const auto& val : [&]() -> auto& {
+          try {
+            return head.at("types").at(std::string(name.begin(),name.end()));
+          } catch (const std::exception& e) {
+            throw error("no definition for type \"",name,'\"');
+          }
+        }()) {
+          auto val_it = val.begin();
+          const auto val_end = val.end();
+          const std::string name = *val_it;
+          const type_node subtype = f(name.c_str(), name.c_str()+name.size());
+          for (++val_it; val_it!=val_end; ++val_it)
+            subtypes.push_back({subtype,*val_it});
+        }
+        type = {
+          memlen_sum(subtypes,[](const auto& x){ return x.type; }),
+          subtypes.size(),false,name };
+        std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       return _types.emplace(name,type).first->second;
     })(name.c_str(), name.c_str()+name.size());
-    for (++val_it; val_it!=val_end; ++val_it) {
-      root_types.push_back({type,val_it->get<std::string>()});
-    }
+    for (++val_it; val_it!=val_end; ++val_it)
+      root_types.push_back({type,*val_it});
   }
   type_node root_type(
     memlen_sum(root_types,[](const auto& x){ return x.type; }),

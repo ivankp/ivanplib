@@ -41,6 +41,11 @@ template <typename T, typename SFINAE=void>
 struct trait;
 
 template <typename T>
+void write_value(std::ostream& o, const T& x) {
+  trait<T>::write_value(o,x);
+}
+
+template <typename T>
 struct trait<T,std::enable_if_t<std::is_arithmetic<T>::value>> {
   static void write_value(std::ostream& o, const T& x) {
     o.write(reinterpret_cast<const char*>(&x), sizeof(x));
@@ -155,8 +160,12 @@ public:
     trait<T>::write_value(o,x);
     return *this;
   }
-
   void write();
+
+  template <typename T>
+  void add_type() {
+    types.emplace( trait<T>::type_name(), trait<T>::type_def() );
+  }
 };
 
 class reader;
