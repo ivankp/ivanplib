@@ -198,7 +198,7 @@ class reader {
   void* m;
   size_t m_len, head_len;
   std::vector<type_node> all_types;
-  type_node root() const { return all_types.front(); }
+  type_node root() const { return all_types.back(); }
 public:
   reader(const char* filename);
   reader(const std::string& filename): reader(filename.c_str()) { }

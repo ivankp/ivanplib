@@ -118,20 +118,19 @@ reader::reader(const char* filename) {
   }
 
   const auto head = nlohmann::json::parse(a0,a);
-  std::map<std::string,type_node,std::less<>> _types;
   std::vector<type_node::child_t> root_types;
   for (const auto& val : head.at("root")) {
     auto val_it = val.begin();
     const auto val_end = val.end();
     const std::string name = *val_it;
-    const type_node type = y_combinator([&_types,&head](
+    const type_node type = y_combinator([this,&head](
       auto f, const char* begin, const char* end
     ) -> type_node {
       if (begin==end) throw error("blank type name");
       const string_view name(begin,end-begin);
-      TEST(name)
-      auto type_it = _types.find(name);
-      if (type_it!=_types.end()) return type_it->second;
+      auto type_it = std::find_if(all_types.begin(),all_types.end(),
+        [name](type_node x){ return !name.compare(x.name()); });
+      if (type_it!=all_types.end()) return *type_it;
       auto s = end;
       while (s!=begin && std::isdigit(*--s)) ;
       const char c = *s;
@@ -189,7 +188,8 @@ reader::reader(const char* filename) {
           subtypes.size(),false,name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
-      return _types.emplace(name,type).first->second;
+      all_types.emplace_back(type);
+      return all_types.back();
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it)
       root_types.push_back({type,*val_it});
@@ -198,9 +198,7 @@ reader::reader(const char* filename) {
     memlen_sum(root_types,[](const auto& x){ return x.type; }),
     root_types.size(),false,{});
   std::move(root_types.begin(),root_types.end(),root_type.begin());
-  all_types.reserve(_types.size()+1);
   all_types.emplace_back(root_type);
-  for (const auto& type : _types) all_types.emplace_back(type.second);
 }
 
 void reader::close() {
