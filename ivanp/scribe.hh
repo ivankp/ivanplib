@@ -14,6 +14,7 @@
 #include "ivanp/unfold.hh"
 #include "ivanp/detect.hh"
 #include "ivanp/boolean.hh"
+#include "ivanp/error.hh"
 
 #ifdef __cpp_lib_variant
 #include <string_view>
@@ -33,6 +34,8 @@ namespace ivanp { namespace scribe { using boost::string_view; }}
 
 namespace ivanp {
 namespace scribe {
+
+struct error: ivanp::error { using ivanp::error::error; };
 
 using writer_type_map = std::map<std::string,std::string,std::less<>>;
 using size_type = uint32_t;
@@ -169,8 +172,11 @@ public:
 };
 
 class reader;
+class node;
 
-struct type_node {
+class type_node {
+  friend class reader;
+  friend class node;
   char* p;
   struct child_t;
   type_node(): p(nullptr) { }
@@ -178,12 +184,14 @@ struct type_node {
     size_t memlen, size_t size, bool is_array, string_view name
   );
   void clean();
+  child_t* begin();
+  child_t* end();
+  size_t memlen(const char*) const;
+public:
   size_t memlen() const;
   size_t size() const;
   bool is_array() const;
   size_t num_children() const;
-  child_t* begin();
-  child_t* end();
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;
@@ -191,14 +199,33 @@ struct type_node {
 struct type_node::child_t {
   type_node type;
   std::string name;
-  type_node operator->() const { return type; }
+  const type_node* operator->() const { return &type; }
+};
+
+class node {
+  friend class reader;
+  char* p;
+  type_node type;
+  node(char* p, type_node type): p(p), type(type) { }
+public:
+  const type_node* operator->() const { return &type; }
+  template <typename T>
+  const T& cast() const { return *reinterpret_cast<const T*>(p); }
+  template <typename T>
+  const T& safe_cast() const {
+    const auto& type_name = trait<T>::type_name();
+    if (type_name!=type.name()) throw error(
+      "cannot cast ",type.name()," to ",type_name);
+    return *reinterpret_cast<const T*>(p);
+  }
+  node operator[](size_type) const;
+  // node operator[](const char*) const;
 };
 
 class reader {
-  void* m;
-  size_t m_len, head_len;
+  char *m, *data;
+  size_t m_len;
   std::vector<type_node> all_types;
-  type_node root() const { return all_types.back(); }
 public:
   reader(const char* filename);
   reader(const std::string& filename): reader(filename.c_str()) { }
@@ -206,13 +233,12 @@ public:
   void close();
 
   string_view head() const;
-
   void print_types() const;
+  type_node root_type() const { return all_types.back(); }
+  node root() const { return { data, root_type() }; }
 
-  template <typename... Ts>
-  void* get(const Ts&... xs) {
-    return nullptr;
-  }
+  template <typename T>
+  node operator[](const T& key) const { return root()[key]; }
 };
 
 }}

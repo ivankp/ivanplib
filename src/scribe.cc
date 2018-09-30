@@ -19,7 +19,6 @@
 #include <nlohmann/json.hpp>
 
 #include "ivanp/functional.hh"
-#include "ivanp/error.hh"
 
 using std::cout;
 using std::endl;
@@ -29,10 +28,6 @@ using boost::lexical_cast;
   std::cout << "\033[36m" #var "\033[0m = " << var << std::endl;
 
 namespace ivanp { namespace scribe {
-
-struct error: ivanp::error {
-  using ivanp::error::error;
-};
 
 void writer::write() {
   if (file_name.empty()) throw error("invalid state");
@@ -97,27 +92,23 @@ reader::reader(const char* filename) {
   if (::fstat(fd, &sb) == -1) throw error("fstat");
   if (!S_ISREG(sb.st_mode)) throw error("not a file");
   m_len = sb.st_size;
-  m = mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0);
+  m = reinterpret_cast<char*>(mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0));
   if (m == MAP_FAILED) throw error("mmap");
   if (::close(fd) == -1) throw error("close");
 
   int nbraces = 0;
-  const char * const a0 = reinterpret_cast<const char*>(m), *a = a0;
-  for (;;) {
-    if ((decltype(m_len))(a-a0) >= m_len)
+  for (data = m;;) {
+    if ((decltype(m_len))(data-m) >= m_len)
       throw error("reached EOF while reading header");
-    const char c = *a;
+    const char c = *data;
     if (c=='{') ++nbraces;
     else if (c=='}') --nbraces;
-    ++a;
-    if (nbraces==0) {
-      head_len = (a-a0);
-      break;
-    }
+    ++data;
+    if (nbraces==0) break;
     else if (nbraces < 0) throw error("unpaired \'}\' in header");
   }
 
-  const auto head = nlohmann::json::parse(a0,a);
+  const auto head = nlohmann::json::parse(m,data);
   std::vector<type_node::child_t> root_types;
   for (const auto& val : head.at("root")) {
     auto val_it = val.begin();
@@ -213,9 +204,7 @@ reader::~reader() {
   }
 }
 
-string_view reader::head() const {
-  return { reinterpret_cast<const char*>(m), head_len };
-}
+string_view reader::head() const { return { m, size_t(data-m) }; }
 
 void reader::print_types() const {
   for (const auto& type : all_types) {
@@ -286,5 +275,63 @@ const char* type_node::name() const {
       + num_children()*sizeof(child_t)
   );
 }
+
+size_t type_node::memlen(const char* m) const {
+  auto len = memlen();
+  if (!len) {
+    if (is_array()) {
+      auto n = size();
+      if (!n) {
+        n = *reinterpret_cast<const size_type*>(m);
+        len += sizeof(size_type);
+        m += sizeof(size_type);
+      }
+      auto subtype = begin()->type;
+      auto len2 = subtype.memlen();
+      if (len2) return len + n*len2;
+      for (size_t i=0; i<n; ++i) {
+        len2 = subtype.memlen(m);
+        len += len2;
+        m += len2;
+      }
+    } else {
+      for (const auto& a : *this) {
+        const auto len2 = a->memlen(m);
+        len += len2;
+        m += len2;
+      }
+    }
+  }
+  return len;
+}
+
+node node::operator[](size_type key) const {
+  auto size = type.size();
+  char* m = p;
+  if (type.is_array()) {
+    if (!size) {
+      size = *reinterpret_cast<size_type*>(m);
+      m += sizeof(size_type);
+    }
+    if (key >= size) throw error("index out of bound");
+    auto subtype = type.begin()->type;
+    const auto len = subtype.memlen();
+    if (len) m += len*key;
+    else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
+    return { m, subtype };
+  } else {
+    if (key >= size) throw error("index out of bound");
+    auto a = type.begin();
+    for (const auto b=a+key; a!=b; ++a) {
+      m += (*a)->memlen(m);
+      // auto len = (*a)->memlen(m);
+      // m += len;
+    }
+    return { m, a->type };
+  }
+}
+// node node::operator[](const char*) const {
+//   return *this;
+// }
 
 }}
