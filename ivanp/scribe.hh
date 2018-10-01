@@ -180,7 +180,7 @@ class type_node {
   struct child_t;
   type_node(): p(nullptr) { }
   type_node(
-    size_t memlen, size_t size, bool is_array, string_view name
+    size_t memlen, size_type size, bool is_array, string_view name
   );
   void clean();
   child_t* begin();
@@ -188,9 +188,9 @@ class type_node {
   size_t memlen(const char*) const;
 public:
   size_t memlen() const;
-  size_t size() const;
+  size_type size() const;
   bool is_array() const;
-  size_t num_children() const;
+  size_type num_children() const;
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;

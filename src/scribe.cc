@@ -128,13 +128,13 @@ reader::reader(const char* filename) {
       const auto size_len = end-s-1;
       type_node type;
       if (c=='#') { // array
-        size_t size = 0; // array length
-        if (end-s>1) size = lexical_cast<size_t>(s+1,size_len);
+        size_type size = 0; // array length
+        if (end-s>1) size = lexical_cast<size_type>(s+1,size_len);
         type_node subtype = f(begin,s);
         type = { subtype.memlen()*size, size, true, name };
         type.begin()->type = subtype;
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) { // fundamental
-        type = { lexical_cast<size_t>(s+1,size_len), 0, false, name };
+        type = { lexical_cast<size_type>(s+1,size_len), 0, false, name };
       } else if (end-s==1 && [begin,end](){
           if (*begin!='(' || *(end-1)!=')') return false;
           int cnt = 0, prev_cnt = 0;
@@ -155,7 +155,7 @@ reader::reader(const char* filename) {
         }
         type = {
           memlen_sum(subtypes,[](const auto& x){ return x; }),
-          subtypes.size(), false, name };
+          (size_type)subtypes.size(), false, name };
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
       } else { // user defined type
@@ -176,7 +176,7 @@ reader::reader(const char* filename) {
         }
         type = {
           memlen_sum(subtypes,[](const auto& x){ return x.type; }),
-          subtypes.size(),false,name };
+          (size_type)subtypes.size(), false, name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       all_types.emplace_back(type);
@@ -187,7 +187,7 @@ reader::reader(const char* filename) {
   }
   type = {
     memlen_sum(root_types,[](const auto& x){ return x.type; }),
-    root_types.size(),false,{} };
+    (size_type)root_types.size(), false, {} };
   std::move(root_types.begin(),root_types.end(),type.begin());
 }
 
@@ -225,7 +225,7 @@ inline char* memcpy_pack(char* p, const Ts&... xs) {
 }
 
 type_node::type_node(
-  size_t memlen, size_t size, bool is_array, string_view name
+  size_t memlen, size_type size, bool is_array, string_view name
 ): p(new char[
       sizeof(memlen) // memlen
     + sizeof(size) // number of elements
@@ -246,22 +246,22 @@ void type_node::clean() {
 size_t type_node::memlen() const {
   return *reinterpret_cast<size_t*>(p);
 }
-size_t type_node::size() const {
-  return *reinterpret_cast<size_t*>(p + sizeof(size_t));
+size_type type_node::size() const {
+  return *reinterpret_cast<size_type*>(p + sizeof(size_t));
 }
 bool type_node::is_array() const {
-  return *reinterpret_cast<bool*>(p + sizeof(size_t) + sizeof(size_t));
+  return *reinterpret_cast<bool*>(p + sizeof(size_t) + sizeof(size_type));
 }
-size_t type_node::num_children() const {
+size_type type_node::num_children() const {
   return is_array() ? 1 : size();
 }
 type_node::child_t* type_node::begin() {
   return reinterpret_cast<child_t*>(
-    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool));
+    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool));
 }
 const type_node::child_t* type_node::begin() const {
   return reinterpret_cast<child_t*>(
-    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool));
+    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool));
 }
 type_node::child_t* type_node::end() {
   return begin() + num_children();
@@ -271,7 +271,7 @@ const type_node::child_t* type_node::end() const {
 }
 const char* type_node::name() const {
   return reinterpret_cast<const char*>(
-    p + sizeof(size_t) + sizeof(size_t) + sizeof(bool)
+    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool)
       + num_children()*sizeof(child_t)
   );
 }
@@ -280,7 +280,7 @@ size_t type_node::memlen(const char* m) const {
   auto len = memlen();
   if (!len) {
     if (is_array()) {
-      auto n = size();
+      size_type n = size();
       if (!n) {
         n = *reinterpret_cast<const size_type*>(m);
         len += sizeof(size_type);
@@ -289,7 +289,7 @@ size_t type_node::memlen(const char* m) const {
       auto subtype = begin()->type;
       auto len2 = subtype.memlen();
       if (len2) return len + n*len2;
-      for (size_t i=0; i<n; ++i) {
+      for (size_type i=0; i<n; ++i) {
         len2 = subtype.memlen(m);
         len += len2;
         m += len2;
