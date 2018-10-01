@@ -172,6 +172,7 @@ struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
 
 class reader;
 class node;
+class node_iterator;
 
 class type_node {
   friend class reader;
@@ -188,15 +189,16 @@ class type_node {
   flags_t& flags() const;
   child_t* begin();
   child_t* end();
-  size_t memlen(const char*) const;
 public:
   size_t memlen() const;
+  size_t memlen(const char* /*memory pointer*/) const;
   size_type size() const;
   bool is_array() const;
   size_type num_children() const;
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;
+  type_node operator[](size_type i) const;
 };
 struct type_node::child_t {
   type_node type;
@@ -210,6 +212,7 @@ struct type_node::flags_size: std::integral_constant<unsigned,
   (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t))%8u + sizeof(flags_t)> {};
 
 class node {
+  friend class node_iterator;
 protected:
   char* data;
   type_node type;
@@ -232,11 +235,24 @@ public:
     return cast<T>();
   }
   node operator[](size_type) const;
-  node operator[](const char*) const;
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value,node> operator[](T key) const {
     return operator[](static_cast<size_type>(key));
   }
+  node operator[](const char*) const;
+  node operator[](const std::string& s) const {
+    return operator[](s.c_str());
+  }
+};
+
+class node_iterator {
+  size_type index;
+  node _node;
+public:
+  node_iterator(size_type i, const node& n): index(i), _node(n) { }
+  node_iterator(size_type i): index(i), _node() { }
+  node operator*() const { return { _node.data, _node.type[index] }; }
+  node_iterator& operator++();
 };
 
 class reader: public node {
@@ -251,6 +267,8 @@ public:
 
   string_view head() const;
   void print_types() const;
+  type_node root_type() const { return type; }
+  void* data_ptr() const { return data; }
 };
 
 }}

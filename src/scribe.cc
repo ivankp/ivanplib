@@ -120,7 +120,7 @@ reader::reader(const char* filename) {
       if (begin==end) throw error("blank type name");
       const string_view name(begin,end-begin);
       auto type_it = std::find_if(all_types.begin(),all_types.end(),
-        [name](type_node x){ return !name.compare(x.name()); });
+        [name](type_node x){ return name == x.name(); });
       if (type_it!=all_types.end()) return *type_it;
       auto s = end;
       while (s!=begin && std::isdigit(*--s)) ;
@@ -231,7 +231,7 @@ type_node::type_node(
     + sizeof(size) // number of elements
     + flags_size::value
     + (is_array?1:size)*sizeof(child_t) // children
-    + name.size()+1  // name
+    + name.size()+1 // name
 ]){
   child_t* child = reinterpret_cast<child_t*>(
     memcpy_pack(p,memlen,size) + flags_size::value
@@ -282,6 +282,9 @@ const char* type_node::name() const {
     p + (sizeof(size_t) + sizeof(size_type) + flags_size::value)
       + num_children()*sizeof(child_t)
   );
+}
+type_node type_node::operator[](size_type i) const {
+  return (begin()+(is_array() ? 0 : i))->type;
 }
 
 size_t type_node::memlen(const char* m) const {
@@ -346,6 +349,13 @@ node node::operator[](const char* key) const {
     m += (*a)->memlen(m);
   }
   return { m, a->type };
+}
+
+node_iterator& node_iterator::operator++() {
+  auto& m = _node.data;
+  m += _node.type[index].memlen(m);
+  ++index;
+  return *this;
 }
 
 }}
