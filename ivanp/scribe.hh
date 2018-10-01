@@ -74,8 +74,6 @@ struct trait<T[N]> {
     return value_trate::type_name()+"#"+std::to_string(N);
   }
   static void write_value(std::ostream& o, const T* x) {
-    const size_type n = N;
-    o.write(reinterpret_cast<const char*>(&n), sizeof(n));
     for (size_type i=0; i<N; ++i) value_trate::write_value(o,x[i]);
   }
 };
@@ -208,7 +206,12 @@ class node {
   type_node type;
   node(char* p, type_node type): p(p), type(type) { }
 public:
-  const type_node* operator->() const { return &type; }
+  const char* type_name() const { return type.name(); }
+  size_type size() const {
+    const auto n = type.size();
+    if (n || !type.is_array()) return n;
+    else return *reinterpret_cast<size_type*>(p);
+  }
   template <typename T>
   const T& cast() const { return *reinterpret_cast<const T*>(p); }
   template <typename T>
@@ -216,7 +219,7 @@ public:
     const auto& type_name = trait<T>::type_name();
     if (type_name!=type.name()) throw error(
       "cannot cast ",type.name()," to ",type_name);
-    return *reinterpret_cast<const T*>(p);
+    return cast<T>();
   }
   node operator[](size_type) const;
   // node operator[](const char*) const;
