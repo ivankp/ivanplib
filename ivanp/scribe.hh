@@ -202,19 +202,20 @@ struct type_node::child_t {
 };
 
 class node {
-  friend class reader;
-  char* p;
+protected:
+  char* data;
   type_node type;
-  node(char* p, type_node type): p(p), type(type) { }
+  node(): data(nullptr), type() { }
+  node(char* data, type_node type): data(data), type(type) { }
 public:
   const char* type_name() const { return type.name(); }
   size_type size() const {
     const auto n = type.size();
     if (n || !type.is_array()) return n;
-    else return *reinterpret_cast<size_type*>(p);
+    else return *reinterpret_cast<size_type*>(data);
   }
   template <typename T>
-  const T& cast() const { return *reinterpret_cast<const T*>(p); }
+  const T& cast() const { return *reinterpret_cast<const T*>(data); }
   template <typename T>
   const T& safe_cast() const {
     const auto& type_name = trait<T>::type_name();
@@ -230,8 +231,8 @@ public:
   }
 };
 
-class reader {
-  char *m, *data;
+class reader: public node {
+  char *m;
   size_t m_len;
   std::vector<type_node> all_types;
 public:
@@ -242,11 +243,6 @@ public:
 
   string_view head() const;
   void print_types() const;
-  type_node root_type() const { return all_types.back(); }
-  node root() const { return { data, root_type() }; }
-
-  template <typename T>
-  node operator[](const T& key) const { return root()[key]; }
 };
 
 }}

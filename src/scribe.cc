@@ -114,7 +114,7 @@ reader::reader(const char* filename) {
     auto val_it = val.begin();
     const auto val_end = val.end();
     const std::string name = *val_it;
-    const type_node type = y_combinator([this,&head](
+    const type_node root_type = y_combinator([this,&head](
       auto f, const char* begin, const char* end
     ) -> type_node {
       if (begin==end) throw error("blank type name");
@@ -183,16 +183,16 @@ reader::reader(const char* filename) {
       return all_types.back();
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it)
-      root_types.push_back({type,*val_it});
+      root_types.push_back({root_type,*val_it});
   }
-  type_node root_type(
+  type = {
     memlen_sum(root_types,[](const auto& x){ return x.type; }),
-    root_types.size(),false,{});
-  std::move(root_types.begin(),root_types.end(),root_type.begin());
-  all_types.emplace_back(root_type);
+    root_types.size(),false,{} };
+  std::move(root_types.begin(),root_types.end(),type.begin());
 }
 
 void reader::close() {
+  type.clean();
   for (auto& type : all_types) type.clean();
   if (munmap(m,m_len) == -1) throw error("munmap");
 }
@@ -307,22 +307,22 @@ size_t type_node::memlen(const char* m) const {
 
 node node::operator[](size_type key) const {
   auto size = type.size();
-  char* m = p;
+  char* m = data;
   if (type.is_array()) {
     if (!size) {
       size = *reinterpret_cast<size_type*>(m);
       m += sizeof(size_type);
     }
-    if (key >= size) throw error("index out of bound");
+    if (key >= size) throw error("index ",key," out of bound");
     auto subtype = type.begin()->type;
     const auto len = subtype.memlen();
     if (len) m += len*key;
     else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
     return { m, subtype };
   } else {
-    if (key >= size) throw error("index out of bound");
+    if (key >= size) throw error("index ",key," out of bound");
     auto a = type.begin();
-    for (const auto b=a+key; a!=b; ++a) {
+    for (const auto _end=a+key; a!=_end; ++a) {
       m += (*a)->memlen(m);
     }
     return { m, a->type };
@@ -330,10 +330,10 @@ node node::operator[](size_type key) const {
 }
 node node::operator[](const char* key) const {
   if (type.is_array()) throw error("cannot use string as array index");
-  char* m = p;
+  char* m = data;
   auto a = type.begin();
   for (const auto _end = type.end();; ++a) {
-    if (a==_end) throw error("key not found");
+    if (a==_end) throw error("key \"",key,"\" not found");
     if (a->name==key) break;
     m += (*a)->memlen(m);
   }
