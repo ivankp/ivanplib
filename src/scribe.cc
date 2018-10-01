@@ -324,14 +324,20 @@ node node::operator[](size_type key) const {
     auto a = type.begin();
     for (const auto b=a+key; a!=b; ++a) {
       m += (*a)->memlen(m);
-      // auto len = (*a)->memlen(m);
-      // m += len;
     }
     return { m, a->type };
   }
 }
-// node node::operator[](const char*) const {
-//   return *this;
-// }
+node node::operator[](const char* key) const {
+  if (type.is_array()) throw error("cannot use string as array index");
+  char* m = p;
+  auto a = type.begin();
+  for (const auto _end = type.end();; ++a) {
+    if (a==_end) throw error("key not found");
+    if (a->name==key) break;
+    m += (*a)->memlen(m);
+  }
+  return { m, a->type };
+}
 
 }}

@@ -37,11 +37,50 @@ namespace scribe {
 
 struct error: ivanp::error { using ivanp::error::error; };
 
-using writer_type_map = std::map<std::string,std::string,std::less<>>;
 using size_type = uint32_t;
+
+namespace detail {
+template <typename T> using begin_t = decltype(begin(std::declval<T>()));
+template <typename T> using   end_t = decltype(end  (std::declval<T>()));
+template <typename T>
+using is_container = ivanp::conjunction<
+  ivanp::is_detected<begin_t,T>,
+  ivanp::is_detected<  end_t,T>
+>;
+template <typename T>
+using tuple_size_value_t = decltype(std::tuple_size<T>::value);
+template <typename T>
+using is_tuple = ivanp::bool_constant<
+  ivanp::is_detected<tuple_size_value_t,T>::value
+>;
+}
 
 template <typename T, typename SFINAE=void>
 struct trait;
+
+class writer {
+  std::string file_name;
+  std::stringstream o;
+  std::vector<std::tuple<std::string,std::string>> root;
+  std::map<std::string,std::string,std::less<>> types;
+public:
+  writer(const std::string& filename): file_name(filename) { }
+  writer(std::string&& filename): file_name(std::move(filename)) { }
+  ~writer() { write(); }
+
+  template <typename T, typename S>
+  writer& write(S&& name, const T& x) {
+    root.emplace_back( trait<T>::type_name(), std::forward<S>(name) );
+    trait<T>::write_value(o,x);
+    return *this;
+  }
+  void write();
+
+  template <typename T>
+  void add_type() {
+    types.emplace( trait<T>::type_name(), trait<T>::type_def() );
+  }
+};
 
 template <typename T>
 void write_value(std::ostream& o, const T& x) {
@@ -78,23 +117,9 @@ struct trait<T[N]> {
   }
 };
 
-template <typename T> using begin_t = decltype(begin(std::declval<T>()));
-template <typename T> using   end_t = decltype(end  (std::declval<T>()));
-template <typename T>
-using is_container = ivanp::conjunction<
-  ivanp::is_detected<begin_t,T>,
-  ivanp::is_detected<  end_t,T>
->;
-template <typename T>
-using tuple_size_value_t = decltype(std::tuple_size<T>::value);
-template <typename T>
-using is_tuple = ivanp::bool_constant<
-  ivanp::is_detected<tuple_size_value_t,T>::value
->;
-
 template <typename T>
 struct trait<T, void_t<std::enable_if_t<
-  is_container<T>::value && !is_tuple<T>::value
+  detail::is_container<T>::value && !detail::is_tuple<T>::value
 >>> {
   using value_type = std::decay_t<decltype(*std::declval<T>().begin())>;
   using value_trate = trait<value_type>;
@@ -123,7 +148,7 @@ struct trait<std::array<T,N>> {
 };
 
 template <typename T>
-struct trait<T, void_t<std::enable_if_t<is_tuple<T>::value>>> {
+struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
   template <size_t I> using value_trait = trait<std::tuple_element_t<I,T>>;
   template <size_t... I> using _seq = std::index_sequence<I...>;
   using seq = std::make_index_sequence<std::tuple_size<T>::value>;
@@ -142,30 +167,6 @@ struct trait<T, void_t<std::enable_if_t<is_tuple<T>::value>>> {
   static std::string type_name() { return _type_name(seq{}); }
   static void write_value(std::ostream& o, const T& x) {
     _write_value(o,x,seq{});
-  }
-};
-
-class writer {
-  std::string file_name;
-  std::stringstream o;
-  std::vector<std::tuple<std::string,std::string>> root;
-  writer_type_map types;
-public:
-  writer(const std::string& filename): file_name(filename) { }
-  writer(std::string&& filename): file_name(std::move(filename)) { }
-  ~writer() { write(); }
-
-  template <typename T, typename S>
-  writer& write(S&& name, const T& x) {
-    root.emplace_back( trait<T>::type_name(), std::forward<S>(name) );
-    trait<T>::write_value(o,x);
-    return *this;
-  }
-  void write();
-
-  template <typename T>
-  void add_type() {
-    types.emplace( trait<T>::type_name(), trait<T>::type_def() );
   }
 };
 
@@ -222,7 +223,11 @@ public:
     return cast<T>();
   }
   node operator[](size_type) const;
-  // node operator[](const char*) const;
+  node operator[](const char*) const;
+  template <typename T>
+  std::enable_if_t<std::is_integral<T>::value,node> operator[](T key) const {
+    return operator[](static_cast<size_type>(key));
+  }
 };
 
 class reader {
