@@ -178,11 +178,14 @@ class type_node {
   friend class node;
   char* p;
   struct child_t;
+  struct flags_t;
+  struct flags_size;
   type_node(): p(nullptr) { }
   type_node(
     size_t memlen, size_type size, bool is_array, string_view name
   );
   void clean();
+  flags_t& flags() const;
   child_t* begin();
   child_t* end();
   size_t memlen(const char*) const;
@@ -200,6 +203,11 @@ struct type_node::child_t {
   std::string name;
   const type_node* operator->() const { return &type; }
 };
+struct type_node::flags_t {
+  bool array : 1;
+};
+struct type_node::flags_size: std::integral_constant<unsigned,
+  (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t))%8u + sizeof(flags_t)> {};
 
 class node {
 protected:

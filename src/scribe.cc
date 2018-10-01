@@ -229,15 +229,20 @@ type_node::type_node(
 ): p(new char[
       sizeof(memlen) // memlen
     + sizeof(size) // number of elements
-    + sizeof(is_array)
+    + flags_size::value
     + (is_array?1:size)*sizeof(child_t) // children
     + name.size()+1  // name
 ]){
-  child_t* _p = reinterpret_cast<child_t*>(memcpy_pack(p,memlen,size,is_array));
-  for (child_t* end=_p+(is_array?1:size); _p!=end; ++_p) new(_p) child_t();
-  if (is_array) (_p-1)->name = { "\0", 1 };
-  memcpy(_p,name.data(),name.size());
-  *(reinterpret_cast<char*>(_p)+name.size()) = '\0';
+  child_t* child = reinterpret_cast<child_t*>(
+    memcpy_pack(p,memlen,size) + flags_size::value
+  );
+  for (child_t* end=child+(is_array?1:size); child!=end; ++child)
+    new(child) child_t();
+  if (is_array) (child-1)->name = { "\0", 1 };
+  flags().array = is_array;
+  reinterpret_cast<char*>(
+    memcpy(reinterpret_cast<char*>(child),name.data(),name.size())
+  )[name.size()] = '\0';
 }
 void type_node::clean() {
   for (auto& child : *this) child.~child_t();
@@ -249,19 +254,22 @@ size_t type_node::memlen() const {
 size_type type_node::size() const {
   return *reinterpret_cast<size_type*>(p + sizeof(size_t));
 }
+type_node::flags_t& type_node::flags() const {
+  return *reinterpret_cast<flags_t*>(p + (sizeof(size_t) + sizeof(size_type)));
+}
 bool type_node::is_array() const {
-  return *reinterpret_cast<bool*>(p + sizeof(size_t) + sizeof(size_type));
+  return flags().array;
 }
 size_type type_node::num_children() const {
   return is_array() ? 1 : size();
 }
 type_node::child_t* type_node::begin() {
   return reinterpret_cast<child_t*>(
-    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool));
+    p + (sizeof(size_t) + sizeof(size_type) + flags_size::value));
 }
 const type_node::child_t* type_node::begin() const {
   return reinterpret_cast<child_t*>(
-    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool));
+    p + (sizeof(size_t) + sizeof(size_type) + flags_size::value));
 }
 type_node::child_t* type_node::end() {
   return begin() + num_children();
@@ -271,7 +279,7 @@ const type_node::child_t* type_node::end() const {
 }
 const char* type_node::name() const {
   return reinterpret_cast<const char*>(
-    p + sizeof(size_t) + sizeof(size_type) + sizeof(bool)
+    p + (sizeof(size_t) + sizeof(size_type) + flags_size::value)
       + num_children()*sizeof(child_t)
   );
 }
