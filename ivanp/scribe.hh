@@ -16,7 +16,7 @@
 #include "ivanp/boolean.hh"
 #include "ivanp/error.hh"
 
-#ifdef __cpp_lib_variant
+#ifdef __cpp_lib_string_view
 #include <string_view>
 namespace ivanp { namespace scribe { using std::string_view; }}
 #else
@@ -24,20 +24,13 @@ namespace ivanp { namespace scribe { using std::string_view; }}
 namespace ivanp { namespace scribe { using boost::string_view; }}
 #endif
 
-// #ifdef __cpp_lib_variant
-// #include <variant>
-// namespace ivanp { namespace scribe { using std::variant; }}
-// #else
-// #include <boost/variant.hpp>
-// namespace ivanp { namespace scribe { using boost::variant; }}
-// #endif
-
 namespace ivanp {
 namespace scribe {
 
 struct error: ivanp::error { using ivanp::error::error; };
 
 using size_type = uint32_t;
+using union_index_type = uint8_t;
 
 namespace detail {
 template <typename T> using begin_t = decltype(begin(std::declval<T>()));
@@ -184,7 +177,7 @@ class type_node {
   struct flags_size;
   type_node(): p(nullptr) { }
   type_node(
-    size_t memlen, size_type size, bool is_array, string_view name
+    size_t memlen, size_type size, flags_t flags, string_view name
   );
   void clean();
   flags_t& flags() const;
@@ -195,6 +188,7 @@ public:
   size_t memlen(const char* /*memory pointer*/) const;
   size_type size() const;
   bool is_array() const;
+  bool is_union() const;
   size_type num_children() const;
   const child_t* begin() const;
   const child_t* end() const;
@@ -207,10 +201,13 @@ struct type_node::child_t {
   const type_node* operator->() const { return &type; }
 };
 struct type_node::flags_t {
-  bool array : 1;
+  bool is_array : 1;
+  bool is_union : 1;
 };
 struct type_node::flags_size: std::integral_constant<unsigned,
-  (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t))%8u + sizeof(flags_t)> {};
+  (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t)) % sizeof(size_t)
+  + sizeof(flags_t)
+> {};
 
 class value_node {
   class iterator {
@@ -235,6 +232,7 @@ protected:
 public:
   const char* type_name() const { return type.name(); }
   size_type size() const {
+    if (type.is_union()) return 0;
     const auto n = type.size();
     if (n || !type.is_array()) return n;
     else return *reinterpret_cast<size_type*>(data);
@@ -263,6 +261,7 @@ public:
       ? data+sizeof(size_type) : data };
   }
   iterator end() const { return { size() }; }
+  value_node operator*() const;
 };
 
 class reader: public value_node {

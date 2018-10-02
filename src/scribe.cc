@@ -127,38 +127,49 @@ reader::reader(const char* filename) {
       const char c = *s;
       const auto size_len = end-s-1;
       type_node type;
-      if (c=='#') { // array
+      // array ------------------------------------------------------
+      if (c=='#') {
         size_type size = 0; // array length
         if (end-s>1) size = lexical_cast<size_type>(s+1,size_len);
         type_node subtype = f(begin,s);
-        type = { subtype.memlen()*size, size, true, name };
+        type = { subtype.memlen()*size, size, {1,0}, name };
         type.begin()->type = subtype;
-      } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) { // fundamental
-        type = { lexical_cast<size_type>(s+1,size_len), 0, false, name };
+      // fundamental ------------------------------------------------
+      } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) {
+        type = { lexical_cast<size_type>(s+1,size_len), 0, {0,0}, name };
+      // tuple or union ---------------------------------------------
       } else if (end-s==1 && [begin,end](){
-          if (*begin!='(' || *(end-1)!=')') return false;
+          char b = *begin, d;
+          if (b=='(') d = ')'; else
+          if (b=='[') d = ']'; else
+          return false;
+          if (*begin!=b || *(end-1)!=d) return false;
           int cnt = 0, prev_cnt = 0;
           for (auto s=begin; s!=end; ++s) {
             prev_cnt = cnt;
-            if (*s=='(') ++cnt; else if (*s==')') --cnt;
+            if (*s==b) ++cnt; else if (*s==d) --cnt;
             if (cnt==0 && prev_cnt==0) return false;
           }
           return !cnt;
         }()
       ) {
+        const char b = *begin;
+        const bool is_union = (b=='[');
+        const char d = (is_union ? ']' : ')');
         std::vector<type_node> subtypes;
         int cnt = 0;
         auto a = begin+1;
         for (auto s=begin; s!=end; ++s) {
-          if (*s=='(') ++cnt; else if (*s==')') --cnt;
+          if (*s==b) ++cnt; else if (*s==d) --cnt;
           if (!cnt) subtypes.push_back(f(a,s)), a = s+2;
         }
-        type = {
-          memlen_sum(subtypes,[](const auto& x){ return x; }),
-          (size_type)subtypes.size(), false, name };
+        type = { (is_union ? 0
+          : memlen_sum(subtypes,[](const auto& x){ return x; })),
+          (size_type)subtypes.size(), {0,is_union}, name };
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
-      } else { // user defined type
+      // user defined type ------------------------------------------
+      } else {
         std::vector<type_node::child_t> subtypes;
         for (const auto& val : [&]() -> auto& {
           try {
@@ -176,7 +187,7 @@ reader::reader(const char* filename) {
         }
         type = {
           memlen_sum(subtypes,[](const auto& x){ return x.type; }),
-          (size_type)subtypes.size(), false, name };
+          (size_type)subtypes.size(), {0,0}, name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       all_types.emplace_back(type);
@@ -187,7 +198,7 @@ reader::reader(const char* filename) {
   }
   type = {
     memlen_sum(root_types,[](const auto& x){ return x.type; }),
-    (size_type)root_types.size(), false, {} };
+    (size_type)root_types.size(), {0,0}, {} };
   std::move(root_types.begin(),root_types.end(),type.begin());
 }
 
@@ -225,21 +236,22 @@ inline char* memcpy_pack(char* p, const Ts&... xs) {
 }
 
 type_node::type_node(
-  size_t memlen, size_type size, bool is_array, string_view name
+  size_t memlen, size_type size, flags_t f, string_view name
 ): p(new char[
       sizeof(memlen) // memlen
     + sizeof(size) // number of elements
     + flags_size::value
-    + (is_array?1:size)*sizeof(child_t) // children
+    + (f.is_array?1:size)*sizeof(child_t) // children
     + name.size()+1 // name
 ]){
   child_t* child = reinterpret_cast<child_t*>(
-    memcpy_pack(p,memlen,size) + flags_size::value
+    memcpy_pack(p,memlen,size,f) - sizeof(f) + flags_size::value
   );
-  for (child_t* end=child+(is_array?1:size); child!=end; ++child)
+  for (child_t* end=child+(f.is_array?1:size); child!=end; ++child)
     new(child) child_t();
-  if (is_array) (child-1)->name = { "\0", 1 };
-  flags().array = is_array;
+  // prevent array member name from being empty
+  if (f.is_array) (child-1)->name = { "\0", 1 };
+  flags().is_array = f.is_array;
   reinterpret_cast<char*>(
     memcpy(reinterpret_cast<char*>(child),name.data(),name.size())
   )[name.size()] = '\0';
@@ -258,7 +270,10 @@ type_node::flags_t& type_node::flags() const {
   return *reinterpret_cast<flags_t*>(p + (sizeof(size_t) + sizeof(size_type)));
 }
 bool type_node::is_array() const {
-  return flags().array;
+  return flags().is_array;
+}
+bool type_node::is_union() const {
+  return flags().is_union;
 }
 size_type type_node::num_children() const {
   return is_array() ? 1 : size();
@@ -305,6 +320,9 @@ size_t type_node::memlen(const char* m) const {
         len += len2;
         m += len2;
       }
+    } else if (is_union()) {
+      return (*(begin()+*reinterpret_cast<const union_index_type*>(m)))
+        ->memlen(m + sizeof(union_index_type));
     } else {
       for (const auto& a : *this) {
         const auto len2 = a->memlen(m);
@@ -324,31 +342,39 @@ value_node value_node::operator[](size_type key) const {
       size = *reinterpret_cast<size_type*>(m);
       m += sizeof(size_type);
     }
-    if (key >= size) throw error("index ",key," out of bound");
-    auto subtype = type.begin()->type;
+    if (key >= size) throw error(
+      "index ",key," out of bound in \"",type.name(),"\"");
+    const auto subtype = type.begin()->type;
     const auto len = subtype.memlen();
     if (len) m += len*key;
     else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
     return { m, subtype };
-  } else {
-    if (key >= size) throw error("index ",key," out of bound");
+  } else if (!type.is_union()) {
+    if (key >= size) throw error(
+      "index ",key," out of bound in \"",type.name(),"\"");
     auto a = type.begin();
     for (const auto _end=a+key; a!=_end; ++a) {
       m += (*a)->memlen(m);
     }
     return { m, a->type };
-  }
+  } else throw error("cannot index \"",type.name(),"\"");
 }
 value_node value_node::operator[](const char* key) const {
-  if (type.is_array()) throw error("cannot use string as array index");
   char* m = data;
   auto a = type.begin();
   for (const auto _end = type.end();; ++a) {
-    if (a==_end) throw error("key \"",key,"\" not found");
+    if (a==_end) throw error(
+      "key \"",key,"\" not found in \"",type.name(),"\"");
     if (a->name==key) break;
     m += (*a)->memlen(m);
   }
   return { m, a->type };
+}
+
+value_node value_node::operator*() const {
+  if (!type.is_union()) throw error("operator* is applicable only to unions");
+  const auto index = *reinterpret_cast<const union_index_type*>(data);
+  return { data + sizeof(index), (type.begin()+index)->type };
 }
 
 value_node::iterator& value_node::iterator::operator++() {
