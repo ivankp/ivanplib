@@ -262,6 +262,8 @@ public:
   }
   iterator end() const { return { size() }; }
   value_node operator*() const;
+  union_index_type union_index() const { return cast<union_index_type>(); }
+  size_type array_size() const { return cast<size_type>(); }
 };
 
 class reader: public value_node {

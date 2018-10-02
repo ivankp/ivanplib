@@ -250,7 +250,7 @@ type_node::type_node(
   for (child_t* end=child+(f.is_array?1:size); child!=end; ++child)
     new(child) child_t();
   // prevent array member name from being empty
-  if (f.is_array) (child-1)->name = { "\0", 1 };
+  // if (f.is_array) (child-1)->name = { "\0", 1 };
   flags().is_array = f.is_array;
   reinterpret_cast<char*>(
     memcpy(reinterpret_cast<char*>(child),name.data(),name.size())
@@ -349,7 +349,9 @@ value_node value_node::operator[](size_type key) const {
     if (len) m += len*key;
     else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
     return { m, subtype };
-  } else if (!type.is_union()) {
+  } else if (type.is_union()) {
+    return (**this)[key];
+  } else {
     if (key >= size) throw error(
       "index ",key," out of bound in \"",type.name(),"\"");
     auto a = type.begin();
@@ -357,22 +359,23 @@ value_node value_node::operator[](size_type key) const {
       m += (*a)->memlen(m);
     }
     return { m, a->type };
-  } else throw error("cannot index \"",type.name(),"\"");
+  }
 }
 value_node value_node::operator[](const char* key) const {
+  if (type.is_union()) return (**this)[key];
   char* m = data;
   auto a = type.begin();
   for (const auto _end = type.end();; ++a) {
     if (a==_end) throw error(
       "key \"",key,"\" not found in \"",type.name(),"\"");
-    if (a->name==key) break;
+    if (!a->name.empty() && a->name==key) break;
     m += (*a)->memlen(m);
   }
   return { m, a->type };
 }
 
 value_node value_node::operator*() const {
-  if (!type.is_union()) throw error("operator* is applicable only to unions");
+  // if (!type.is_union()) throw error("operator* is applicable only to unions");
   const auto index = *reinterpret_cast<const union_index_type*>(data);
   return { data + sizeof(index), (type.begin()+index)->type };
 }
