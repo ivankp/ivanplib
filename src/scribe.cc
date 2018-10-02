@@ -316,7 +316,7 @@ size_t type_node::memlen(const char* m) const {
   return len;
 }
 
-node node::operator[](size_type key) const {
+value_node value_node::operator[](size_type key) const {
   auto size = type.size();
   char* m = data;
   if (type.is_array()) {
@@ -339,7 +339,7 @@ node node::operator[](size_type key) const {
     return { m, a->type };
   }
 }
-node node::operator[](const char* key) const {
+value_node value_node::operator[](const char* key) const {
   if (type.is_array()) throw error("cannot use string as array index");
   char* m = data;
   auto a = type.begin();
@@ -351,9 +351,8 @@ node node::operator[](const char* key) const {
   return { m, a->type };
 }
 
-node_iterator& node_iterator::operator++() {
-  auto& m = _node.data;
-  m += _node.type[index].memlen(m);
+value_node::iterator& value_node::iterator::operator++() {
+  data += type[index].memlen(data);
   ++index;
   return *this;
 }

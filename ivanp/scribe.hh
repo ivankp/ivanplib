@@ -171,12 +171,13 @@ struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
 };
 
 class reader;
-class node;
-class node_iterator;
+class value_node;
+class iterator;
 
 class type_node {
   friend class reader;
-  friend class node;
+  friend class value_node;
+  friend class iterator;
   char* p;
   struct child_t;
   struct flags_t;
@@ -211,13 +212,26 @@ struct type_node::flags_t {
 struct type_node::flags_size: std::integral_constant<unsigned,
   (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t))%8u + sizeof(flags_t)> {};
 
-class node {
-  friend class node_iterator;
+class value_node {
+  class iterator {
+    size_type index;
+    type_node type;
+    char* data;
+  public:
+    iterator(type_node t, char* d): index(0), type(t), data(d) { }
+    iterator(size_type i): index(i) { }
+    value_node operator*() const { return { data, type[index] }; }
+    iterator& operator++();
+    bool operator!=(const iterator& r) const noexcept
+    { return index != r.index; }
+    bool operator==(const iterator& r) const noexcept
+    { return index == r.index; }
+  };
 protected:
   char* data;
   type_node type;
-  node(): data(nullptr), type() { }
-  node(char* data, type_node type): data(data), type(type) { }
+  value_node(): data(nullptr), type() { }
+  value_node(char* data, type_node type): data(data), type(type) { }
 public:
   const char* type_name() const { return type.name(); }
   size_type size() const {
@@ -234,28 +248,24 @@ public:
       "cannot cast ",type.name()," to ",type_name);
     return cast<T>();
   }
-  node operator[](size_type) const;
+  value_node operator[](size_type) const;
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value,node> operator[](T key) const {
+  std::enable_if_t<std::is_integral<T>::value,value_node>
+  operator[](T key) const {
     return operator[](static_cast<size_type>(key));
   }
-  node operator[](const char*) const;
-  node operator[](const std::string& s) const {
+  value_node operator[](const char*) const;
+  value_node operator[](const std::string& s) const {
     return operator[](s.c_str());
   }
+  iterator begin() const {
+    return { type, (type.is_array() && !type.size())
+      ? data+sizeof(size_type) : data };
+  }
+  iterator end() const { return { size() }; }
 };
 
-class node_iterator {
-  size_type index;
-  node _node;
-public:
-  node_iterator(size_type i, const node& n): index(i), _node(n) { }
-  node_iterator(size_type i): index(i), _node() { }
-  node operator*() const { return { _node.data, _node.type[index] }; }
-  node_iterator& operator++();
-};
-
-class reader: public node {
+class reader: public value_node {
   char *m;
   size_t m_len;
   std::vector<type_node> all_types;
