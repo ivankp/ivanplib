@@ -73,12 +73,14 @@ void trait<const char*>::write_value(std::ostream& o, const char* s) {
   o.write(s,n);
 }
 
-template <typename T, typename F>
-size_t memlen_sum(const T& xs, F f) {
+inline size_t memlen(type_node t) noexcept { return t.memlen(); }
+inline size_t memlen(type_node::child_t c) noexcept { return c.type.memlen(); }
+template <typename T>
+size_t memlen_sum(const T& xs) {
   size_t sum = 0;
   for (const auto& x : xs) {
-    const size_t memlen = f(x).memlen();
-    if (memlen) sum += memlen;
+    const size_t len = memlen(x);
+    if (len) sum += len;
     else return 0;
   }
   return sum;
@@ -138,33 +140,50 @@ reader::reader(const char* filename) {
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) {
         type = { lexical_cast<size_type>(s+1,size_len), 0, {0,0}, name };
       // tuple or union ---------------------------------------------
-      } else if (end-s==1 && [begin,end](){
-          char b = *begin, d;
-          if (b=='(') d = ')'; else
-          if (b=='[') d = ']'; else
-          return false;
-          if (*begin!=b || *(end-1)!=d) return false;
-          int cnt = 0, prev_cnt = 0;
+      } else if (end-s==1 && [](auto begin, auto end){
+          const char b = *begin, e = *--end;
+          if (b=='(') {
+            if (e!=')') return false;
+          } else if (b=='[') {
+            if (e!=']') return false;
+          } else return false;
+          int cnt = 0;
           for (auto s=begin; s!=end; ++s) {
-            prev_cnt = cnt;
-            if (*s==b) ++cnt; else if (*s==d) --cnt;
-            if (cnt==0 && prev_cnt==0) return false;
+            if (*s==b) ++cnt; else if (*s==e) --cnt;
+            if (cnt==0) return false;
           }
-          return !cnt;
-        }()
+          return cnt==1;
+        }(begin,end)
       ) {
-        const char b = *begin;
-        const bool is_union = (b=='[');
-        const char d = (is_union ? ']' : ')');
         std::vector<type_node> subtypes;
+        char b='\0', e='\0';
         int cnt = 0;
-        auto a = begin+1;
-        for (auto s=begin; s!=end; ++s) {
-          if (*s==b) ++cnt; else if (*s==d) --cnt;
-          if (!cnt) subtypes.push_back(f(a,s)), a = s+2;
+        auto _begin = begin + 1;
+        const auto _end = end - 1;
+        for (auto s=_begin; s!=_end; ++s) {
+          const char c = *s;
+          if (e) {
+            if (c==b) ++cnt; else
+            if (c==e) --cnt;
+            if (cnt==0) e = '\0';
+          } else if (c==',') {
+            subtypes.push_back(f(_begin,s));
+            _begin = s+1;
+          } else if (c=='(' || c=='[' || c=='{') {
+            b = c;
+            switch (b) {
+              case '(': e = ')'; break;
+              case '[': e = ']'; break;
+              case '{': e = '}'; break;
+              default: ;
+            }
+            ++cnt;
+          }
         }
-        type = { (is_union ? 0
-          : memlen_sum(subtypes,[](const auto& x){ return x; })),
+        subtypes.push_back(f(_begin,_end));
+        const bool is_union = ((*begin)=='[');
+        type = {
+          (is_union ? 0 : memlen_sum(subtypes)),
           (size_type)subtypes.size(), {0,is_union}, name };
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
@@ -186,8 +205,7 @@ reader::reader(const char* filename) {
             subtypes.push_back({subtype,*val_it});
         }
         type = {
-          memlen_sum(subtypes,[](const auto& x){ return x.type; }),
-          (size_type)subtypes.size(), {0,0}, name };
+          memlen_sum(subtypes), (size_type)subtypes.size(), {0,0}, name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       all_types.emplace_back(type);
@@ -196,9 +214,7 @@ reader::reader(const char* filename) {
     for (++val_it; val_it!=val_end; ++val_it)
       root_types.push_back({root_type,*val_it});
   }
-  type = {
-    memlen_sum(root_types,[](const auto& x){ return x.type; }),
-    (size_type)root_types.size(), {0,0}, {} };
+  type = { memlen_sum(root_types), (size_type)root_types.size(), {0,0}, {} };
   std::move(root_types.begin(),root_types.end(),type.begin());
 }
 

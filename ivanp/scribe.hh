@@ -149,7 +149,9 @@ struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
   template <size_t... I>
   static std::string _type_name(_seq<I...>) {
     std::ostringstream s;
-    UNFOLD(( s << '(' << value_trait<I>::type_name() << ')' ))
+    s << '(';
+    UNFOLD(( s << (I?",":"") << value_trait<I>::type_name() ))
+    s << ')';
     return s.str();
   }
   template <size_t... I>
@@ -168,11 +170,13 @@ class value_node;
 class iterator;
 
 class type_node {
+public:
   friend class reader;
   friend class value_node;
   friend class iterator;
-  char* p;
   struct child_t;
+private:
+  char* p;
   struct flags_t;
   struct flags_size;
   type_node(): p(nullptr) { }
@@ -259,7 +263,6 @@ public:
   size_type array_size() const { return cast<size_type>(); }
   union_index_type union_index() const { return cast<union_index_type>(); }
   size_type size() const {
-    if (type.is_union()) return 0;
     const auto n = type.size();
     if (n || !type.is_array()) return n;
     else return array_size();
