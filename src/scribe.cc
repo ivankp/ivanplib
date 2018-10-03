@@ -94,7 +94,7 @@ reader::reader(const char* filename) {
   if (::fstat(fd, &sb) == -1) throw error("fstat");
   if (!S_ISREG(sb.st_mode)) throw error("not a file");
   m_len = sb.st_size;
-  m = reinterpret_cast<char*>(mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0));
+  m = reinterpret_cast<char*>(::mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0));
   if (m == MAP_FAILED) throw error("mmap");
   if (::close(fd) == -1) throw error("close");
 
@@ -261,7 +261,7 @@ type_node::type_node(
     + name.size()+1 // name
 ]){
   child_t* child = reinterpret_cast<child_t*>(
-    memcpy_pack(p,memlen,size,f) - sizeof(f) + flags_size::value
+    memcpy_pack(p,memlen,size,f) + (flags_size::value - sizeof(f))
   );
   for (child_t* end=child+(f.is_array?1:size); child!=end; ++child)
     new(child) child_t();
