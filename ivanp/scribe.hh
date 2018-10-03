@@ -150,7 +150,7 @@ struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
   static std::string _type_name(_seq<I...>) {
     std::ostringstream s;
     s << '(';
-    UNFOLD(( s << (I?",":"") << value_trait<I>::type_name() ))
+    UNFOLD( s << (I?",":"") << value_trait<I>::type_name() )
     s << ')';
     return s.str();
   }
@@ -164,6 +164,29 @@ struct trait<T, void_t<std::enable_if_t<detail::is_tuple<T>::value>>> {
     _write_value(o,x,seq{});
   }
 };
+
+#ifdef BOOST_VARIANT_HPP
+template <typename T, typename... Ts>
+struct trait<boost::variant<T,Ts...>> {
+  static std::string type_name() {
+    std::ostringstream s;
+    s << '[' << trait<T>::type_name();
+    UNFOLD( s << ',' << trait<Ts>::type_name() )
+    s << ']';
+    return s.str();
+  }
+  struct visitor: public boost::static_visitor<void> {
+    std::ostream& o;
+    visitor(std::ostream& o): o(o) { }
+    template <typename V>
+    void operator()(const V& v) const { scribe::write_value(o,v); }
+  };
+  static void write_value(std::ostream& o, const boost::variant<T,Ts...>& x) {
+    scribe::write_value(o,(union_index_type)x.which());
+    apply_visitor(visitor(o),x);
+  }
+};
+#endif
 
 class reader;
 class value_node;
@@ -234,7 +257,7 @@ protected:
   value_node(): data(nullptr), type() { }
   value_node(char* data, type_node type): data(data), type(type) { }
 public:
-  const char* type_name() const { return type.name(); }
+  void* ptr() const { return data; }
   template <typename T>
   const T& cast() const { return *reinterpret_cast<const T*>(data); }
   template <typename T>
@@ -244,6 +267,8 @@ public:
       "cannot cast ",type.name()," to ",type_name);
     return cast<T>();
   }
+
+  const char* type_name() const { return type.name(); }
   value_node operator[](size_type) const;
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value,value_node>
