@@ -231,12 +231,6 @@ protected:
   value_node(char* data, type_node type): data(data), type(type) { }
 public:
   const char* type_name() const { return type.name(); }
-  size_type size() const {
-    if (type.is_union()) return 0;
-    const auto n = type.size();
-    if (n || !type.is_array()) return n;
-    else return *reinterpret_cast<size_type*>(data);
-  }
   template <typename T>
   const T& cast() const { return *reinterpret_cast<const T*>(data); }
   template <typename T>
@@ -262,8 +256,14 @@ public:
   }
   iterator end() const { return { size() }; }
   value_node operator*() const;
-  union_index_type union_index() const { return cast<union_index_type>(); }
   size_type array_size() const { return cast<size_type>(); }
+  union_index_type union_index() const { return cast<union_index_type>(); }
+  size_type size() const {
+    if (type.is_union()) return 0;
+    const auto n = type.size();
+    if (n || !type.is_array()) return n;
+    else return array_size();
+  }
 };
 
 class reader: public value_node {

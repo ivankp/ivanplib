@@ -249,8 +249,6 @@ type_node::type_node(
   );
   for (child_t* end=child+(f.is_array?1:size); child!=end; ++child)
     new(child) child_t();
-  // prevent array member name from being empty
-  // if (f.is_array) (child-1)->name = { "\0", 1 };
   flags().is_array = f.is_array;
   reinterpret_cast<char*>(
     memcpy(reinterpret_cast<char*>(child),name.data(),name.size())
@@ -322,7 +320,7 @@ size_t type_node::memlen(const char* m) const {
       }
     } else if (is_union()) {
       return (*(begin()+*reinterpret_cast<const union_index_type*>(m)))
-        ->memlen(m + sizeof(union_index_type));
+        ->memlen(m + sizeof(union_index_type)) + sizeof(union_index_type);
     } else {
       for (const auto& a : *this) {
         const auto len2 = a->memlen(m);
@@ -375,8 +373,7 @@ value_node value_node::operator[](const char* key) const {
 }
 
 value_node value_node::operator*() const {
-  // if (!type.is_union()) throw error("operator* is applicable only to unions");
-  const auto index = *reinterpret_cast<const union_index_type*>(data);
+  const auto index = union_index();
   return { data + sizeof(index), (type.begin()+index)->type };
 }
 
