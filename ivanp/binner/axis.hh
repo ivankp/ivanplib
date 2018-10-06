@@ -516,11 +516,14 @@ public:
 
 // ==================================================================
 
+template <typename T, typename Axis>
+using vector_of_edges_t = std::vector<
+  std::conditional_t<std::is_void<T>::value,typename Axis::edge_type,T>>;
+
 template <typename T=void, typename Axis>
-auto vector_of_edges(const Axis& axis) {
+vector_of_edges_t<T,Axis> vector_of_edges(const Axis& axis) {
   const auto n = axis.nedges();
-  std::vector<std::conditional_t<std::is_void<T>::value,typename Axis::edge_type,T>>
-    edges;
+  vector_of_edges_t<T,Axis> edges;
   edges.reserve(n);
   for (typename Axis::size_type i=0; i<n; ++i)
     edges.emplace_back(axis.edge(i));

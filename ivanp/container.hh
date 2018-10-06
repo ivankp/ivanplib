@@ -99,13 +99,13 @@ using container_element_t = std::decay_t<decltype(*begin(std::declval<C>()))>;
 
 template <typename C>
 inline auto minmax(C&& c) {
-  const auto begin = begin(c);
-  const auto end   = end  (c);
-  if (begin==end) throw std::runtime_error(
+  auto it = begin(c);
+  const auto _end = end(c);
+  if (it==_end) throw std::runtime_error(
     "ivanp::minmax applied to empty container");
   const auto& init = *it;
   auto m = std::make_pair(init,init);
-  for (++it; it!=end; ++it) {
+  for (++it; it!=_end; ++it) {
     const auto& x = *it;
     if (m.first  > x) m.first  = x;
     if (m.second < x) m.second = x;

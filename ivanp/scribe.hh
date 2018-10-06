@@ -59,15 +59,15 @@ class writer {
 public:
   writer(const std::string& filename): file_name(filename) { }
   writer(std::string&& filename): file_name(std::move(filename)) { }
-  ~writer() { write(); }
+  ~writer() { if (!file_name.empty()) write(); }
 
   template <typename T, typename S>
-  writer& write(S&& name, const T& x) {
+  writer& operator()(S&& name, const T& x) {
     root.emplace_back( trait<T>::type_name(), std::forward<S>(name) );
     trait<T>::write_value(o,x);
     return *this;
   }
-  void write();
+  void write(const std::string& info = { });
 
   template <typename T>
   void add_type() {
@@ -75,9 +75,9 @@ public:
   }
 };
 
-template <typename T>
-void write_value(std::ostream& o, const T& x) {
-  trait<T>::write_value(o,x);
+template <typename... T>
+inline void write_values(std::ostream& o, const T&... x) {
+  UNFOLD( trait<T>::write_value(o,x) );
 }
 
 template <typename T>
@@ -203,9 +203,7 @@ private:
   struct flags_t;
   struct flags_size;
   type_node(): p(nullptr) { }
-  type_node(
-    size_t memlen, size_type size, flags_t flags, string_view name
-  );
+  type_node(size_t memlen, size_type size, flags_t flags, string_view name);
   void clean();
   flags_t& flags() const;
   child_t* begin();
@@ -220,7 +218,7 @@ public:
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;
-  type_node operator[](size_type i) const;
+  const type_node operator[](size_type i) const;
 };
 struct type_node::child_t {
   type_node type;
@@ -268,7 +266,9 @@ public:
     return cast<T>();
   }
 
+  type_node get_type() const { return type; }
   const char* type_name() const { return type.name(); }
+  const char* type_name(size_type i) const { return type[i].name(); }
   value_node operator[](size_type) const;
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value,value_node>
@@ -278,6 +278,11 @@ public:
   value_node operator[](const char*) const;
   value_node operator[](const std::string& s) const {
     return operator[](s.c_str());
+  }
+  template <typename T>
+  std::enable_if_t<std::is_convertible<T,std::string>::value,value_node>
+  operator[](const T& key) const {
+    return operator[](static_cast<const std::string&>(key));
   }
   iterator begin() const {
     return { type, (type.is_array() && !type.size())

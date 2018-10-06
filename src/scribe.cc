@@ -29,7 +29,7 @@ using boost::lexical_cast;
 
 namespace ivanp { namespace scribe {
 
-void writer::write() {
+void writer::write(const std::string& info) {
   if (file_name.empty()) throw error("invalid state");
   std::ofstream f(file_name,std::ios::binary);
   file_name.clear(); // erase
@@ -38,17 +38,14 @@ void writer::write() {
   { f << "\"root\":[";
     const auto begin = root.begin();
     const auto end   = root.end  ();
-    for (auto it=begin; ; ) {
-      f << (it!=begin ? ",[" : "[")
-        << "\"" << std::get<0>(*it) << "\","
-           "\"" << std::get<1>(*it) << "\"";
-      if ((++it)==end) { f << "]"; break; }
-      for ( ; std::get<0>(*it)==std::get<0>(*std::prev(it)); ++it) {
+    for (auto it=begin; it!=end; ) {
+      if (it!=begin) f << "],";
+      f << "[\"" << std::get<0>(*it) << "\","
+            "\"" << std::get<1>(*it) << "\"";
+      for (; (++it)!=end && std::get<0>(*it)==std::get<0>(*std::prev(it)); )
         f << ",\"" << std::get<1>(*it) << '\"';
-      }
-      f << ']';
     }
-    f << ']';
+    f << "]]";
   }
   if (!types.empty()) {
     f << ",\"types\":{";
@@ -60,6 +57,7 @@ void writer::write() {
     }
     f << "}";
   }
+  if (!info.empty()) f << ",\"info\":" << info;
   f << '}';
 
   f << o.rdbuf();
@@ -155,6 +153,7 @@ reader::reader(const char* filename) {
           return cnt==1;
         }(begin,end)
       ) {
+        const bool is_union = ((*begin)=='[');
         std::vector<type_node> subtypes;
         char b='\0', e='\0';
         int cnt = 0;
@@ -167,6 +166,14 @@ reader::reader(const char* filename) {
             if (c==e) --cnt;
             if (cnt==0) e = '\0';
           } else if (c==',') {
+            /*
+            if (is_union && *_begin=='#' &&
+                std::all_of(_begin+1,s,std::isdigit)) {
+              size_type size = 0; // array length
+              if (s-_begin>1)
+                size = lexical_cast<size_type>(_begin+1,s-_begin);
+              subtypes.push_back({ 0, size, {1,0}, name });
+            } else*/
             subtypes.push_back(f(_begin,s));
             _begin = s+1;
           } else if (c=='(' || c=='[' || c=='{') {
@@ -181,12 +188,27 @@ reader::reader(const char* filename) {
           }
         }
         subtypes.push_back(f(_begin,_end));
-        const bool is_union = ((*begin)=='[');
         type = {
           (is_union ? 0 : memlen_sum(subtypes)),
           (size_type)subtypes.size(), {0,is_union}, name };
+        // if (is_union) for (auto x : subtypes) {
+        //   auto& t = x.begin()->type;
+        //   if (t.p) t = type;
+        // }
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
+        if (is_union) {
+          y_combinator([type](auto g, type_node _type) -> void {
+            for (auto& child : _type) {
+              auto& t = child.type;
+              if (strcmp(t.name(),"^")) g(t);
+              else { t.clean(); t = type; }
+            }
+          })(type);
+        }
+      // null -------------------------------------------------------
+      } else if (name=="null" || name=="^") {
+        type = { 0, 0, {0,0}, name };
       // user defined type ------------------------------------------
       } else {
         std::vector<type_node::child_t> subtypes;
@@ -208,8 +230,9 @@ reader::reader(const char* filename) {
           memlen_sum(subtypes), (size_type)subtypes.size(), {0,0}, name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
-      all_types.emplace_back(type);
-      return all_types.back();
+      if (strcmp(type.name(),"^")) all_types.emplace_back(type);
+      // return all_types.back();
+      return type;
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it)
       root_types.push_back({root_type,*val_it});
@@ -312,11 +335,14 @@ const char* type_node::name() const {
       + num_children()*sizeof(child_t)
   );
 }
-type_node type_node::operator[](size_type i) const {
+const type_node type_node::operator[](size_type i) const {
   return (begin()+(is_array() ? 0 : i))->type;
 }
 
 size_t type_node::memlen(const char* m) const {
+  TEST(name())
+  TEST(((const void*)(m)))
+  std::cin.get();
   auto len = memlen();
   if (!len) {
     if (is_array()) {
@@ -334,7 +360,9 @@ size_t type_node::memlen(const char* m) const {
         len += len2;
         m += len2;
       }
+      TEST(len)
     } else if (is_union()) {
+      TEST(((unsigned)*reinterpret_cast<const union_index_type*>(m)))
       return (*(begin()+*reinterpret_cast<const union_index_type*>(m)))
         ->memlen(m + sizeof(union_index_type)) + sizeof(union_index_type);
     } else {
@@ -345,6 +373,8 @@ size_t type_node::memlen(const char* m) const {
       }
     }
   }
+  // TEST(len)
+  cout << len << ' ' << name() << endl;
   return len;
 }
 
