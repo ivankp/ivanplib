@@ -340,9 +340,6 @@ const type_node type_node::operator[](size_type i) const {
 }
 
 size_t type_node::memlen(const char* m) const {
-  TEST(name())
-  TEST(((const void*)(m)))
-  std::cin.get();
   auto len = memlen();
   if (!len) {
     if (is_array()) {
@@ -360,9 +357,7 @@ size_t type_node::memlen(const char* m) const {
         len += len2;
         m += len2;
       }
-      TEST(len)
     } else if (is_union()) {
-      TEST(((unsigned)*reinterpret_cast<const union_index_type*>(m)))
       return (*(begin()+*reinterpret_cast<const union_index_type*>(m)))
         ->memlen(m + sizeof(union_index_type)) + sizeof(union_index_type);
     } else {
@@ -373,8 +368,6 @@ size_t type_node::memlen(const char* m) const {
       }
     }
   }
-  // TEST(len)
-  cout << len << ' ' << name() << endl;
   return len;
 }
 

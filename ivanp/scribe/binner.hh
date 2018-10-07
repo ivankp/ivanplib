@@ -11,7 +11,7 @@ struct hist_trait {
   static std::string type_def() {
     std::stringstream s;
     s << "[\"[lin_axis,list_axis]#\",\"axes\"],"
-         "[\"[null," << trait<Bin>::type_name() << ",^#]\",\"bins\"]";
+         "[\"[null," << trait<Bin>::type_name() << ",^#]#\",\"bins\"]";
     // UNFOLD(( s << subst_t<char,Ax>('#') ))
     return s.str();
   }
@@ -28,8 +28,9 @@ private:
   static std::enable_if_t<I!=0>
   write_bins(std::ostream& o, const hist& h, ii_t& ii) {
     using spec = typename hist::template axis_spec<I-1>;
-    const i_t n = std::get<I-1>(h.axes()).nbins() + spec::nover::value;
-    scribe::write_values(o,(size_type)n);
+    i_t n = h.template axis<I-1>().nbins();
+    scribe::write_values(o,(size_type)(n+2));
+    n += spec::nover::value;
     if (!spec::under::value) scribe::write_values(o,(union_index_type)0);
     for (i_t& i = std::get<I-1>(ii) = 0; i<n; ++i) {
       scribe::write_values(o,(union_index_type)(I==1?1:2));
@@ -47,7 +48,6 @@ public:
     scribe::write_values(o,(size_type)sizeof...(Ax));
     scribe::write_values(o,h.axes());
     ii_t ii { };
-    scribe::write_values(o,(union_index_type)2);
     write_bins<sizeof...(Ax)>(o,h,ii);
   }
 };
