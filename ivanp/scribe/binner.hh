@@ -133,16 +133,16 @@ struct trait<ivanp::abstract_axis<T>> {
 
 template <typename T> using bin_type_t = typename T::bin_type;
 
-template <typename T>
+template <typename T, typename... Args>
 inline std::enable_if_t<is_detected<bin_type_t,T>::value>
-add_bin_types(writer& w) {
+add_bin_types(writer& w, Args&&... args) {
   w.add_type<T>();
-  add_bin_types<typename T::bin_type>(w);
+  add_bin_types<typename T::bin_type>(w,std::forward<Args>(args)...);
 }
-template <typename T>
+template <typename T, typename... Args>
 inline std::enable_if_t<!is_detected<bin_type_t,T>::value>
-add_bin_types(writer& w) {
-  w.add_type<T>();
+add_bin_types(writer& w, Args&&... args) {
+  w.add_type<T>(std::forward<Args>(args)...);
 }
 
 template <typename Bin, typename E, typename... Es>
@@ -190,6 +190,16 @@ struct trait<nlo_bin<T>, std::enable_if_t<std::is_array<T>::value>> {
     + std::to_string(nlo_bin<T>::weights.size()) + "\",\"w\"],"
     "[\"" + trait<decltype(std::declval<nlo_bin<T>>().n)>::type_name()
     + "\",\"n\"]";
+  }
+  template <typename U>
+  static std::string type_def(const std::vector<U>& weights_names) {
+    std::stringstream s;
+    s << "[\"" + trait<type>::type_name() + "#2";
+    for (const auto& name : weights_names) s << "\",\"" << name;
+    s << "\"],[\""
+      << trait<decltype(std::declval<nlo_bin<T>>().n)>::type_name()
+      << "\",\"n\"]";
+    return s.str();
   }
   static void write_value(std::ostream& o, const nlo_bin<T>& bin) {
     // bin.finalize();

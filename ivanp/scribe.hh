@@ -69,9 +69,12 @@ public:
   }
   void write(const std::string& info = { });
 
-  template <typename T>
-  void add_type() {
-    types.emplace( trait<T>::type_name(), trait<T>::type_def() );
+  template <typename T, typename... Args>
+  void add_type(Args&&... args) {
+    types.emplace(
+      trait<T>::type_name(),
+      trait<T>::type_def(std::forward<Args>(args)...)
+    );
   }
 };
 
