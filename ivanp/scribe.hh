@@ -52,15 +52,11 @@ template <typename T, typename SFINAE=void>
 struct trait;
 
 class writer {
-  std::string file_name;
   std::stringstream o;
   std::vector<std::tuple<std::string,std::string>> root;
   std::map<std::string,std::string,std::less<>> types;
+  std::string info;
 public:
-  writer(const std::string& filename): file_name(filename) { }
-  writer(std::string&& filename): file_name(std::move(filename)) { }
-  ~writer() { if (!file_name.empty()) write(); }
-
   template <typename T, typename S>
   writer& operator()(S&& name, const T& x) {
     root.emplace_back( trait<T>::type_name(), std::forward<S>(name) );
@@ -76,6 +72,11 @@ public:
       trait<T>::type_def(std::forward<Args>(args)...)
     );
   }
+
+  friend std::ostream& operator<<(std::ostream&, const writer&);
+
+  void add_info(const std::string& jstr) { info = jstr; }
+  void add_info(std::string&& jstr) { info = std::move(jstr); }
 };
 
 template <typename... T>

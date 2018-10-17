@@ -29,15 +29,11 @@ using boost::lexical_cast;
 
 namespace ivanp { namespace scribe {
 
-void writer::write(const std::string& info) {
-  if (file_name.empty()) throw error("invalid state");
-  std::ofstream f(file_name,std::ios::binary);
-  file_name.clear(); // erase
-
+std::ostream& operator<<(std::ostream& f, const writer& w) {
   f << '{';
   { f << "\"root\":[";
-    const auto begin = root.begin();
-    const auto end   = root.end  ();
+    const auto begin = w.root.begin();
+    const auto end   = w.root.end  ();
     for (auto it=begin; it!=end; ) {
       if (it!=begin) f << "],";
       f << "[\"" << std::get<0>(*it) << "\","
@@ -47,22 +43,21 @@ void writer::write(const std::string& info) {
     }
     f << "]]";
   }
-  if (!types.empty()) {
+  if (!w.types.empty()) {
     f << ",\"types\":{";
-    const auto begin = types.begin();
-    const auto end   = types.end  ();
+    const auto begin = w.types.begin();
+    const auto end   = w.types.end  ();
     for (auto it=begin; it!=end; ++it) {
       f << (it!=begin ? ",\"" : "\"") << it->first << "\":["
         << it->second << ']';
     }
     f << "}";
   }
-  if (!info.empty()) f << ",\"info\":" << info;
+  if (!w.info.empty()) f << ",\"info\":" << w.info;
   f << '}';
 
-  f << o.rdbuf();
-  o.str({}); // erase
-  o.clear(); // clear errors
+  return f << w.o.rdbuf();
+  // std::stringstream().swap(w.o); // reset
 }
 
 void trait<const char*>::write_value(std::ostream& o, const char* s) {
