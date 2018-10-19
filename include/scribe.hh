@@ -10,6 +10,8 @@
 #include <tuple>
 #include <map>
 
+#include <nlohmann/json.hpp>
+
 #include "ivanp/meta.hh"
 #include "ivanp/unfold.hh"
 #include "ivanp/detect.hh"
@@ -307,15 +309,18 @@ class reader: public value_node {
   char *m;
   size_t m_len;
   std::vector<type_node> all_types;
+  nlohmann::json json_head;
+  bool mmapped;
 public:
   reader(const char* filename);
   reader(const std::string& filename): reader(filename.c_str()) { }
   ~reader();
   void close();
 
-  string_view head() const;
+  const nlohmann::json& head() const noexcept { return json_head; }
+  string_view head_str() const { return { m, size_t(data-m) }; }
   void print_types() const;
-  type_node root_type() const { return type; }
+  type_node root_type() const noexcept { return type; }
   void* data_ptr() const { return data; }
 };
 

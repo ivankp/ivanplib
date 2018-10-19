@@ -16,9 +16,8 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include <nlohmann/json.hpp>
-
 #include "ivanp/functional.hh"
+#include "ivanp/string.hh"
 
 using std::cout;
 using std::endl;
@@ -81,19 +80,42 @@ size_t memlen_sum(const T& xs) {
 
 // https://www.oreilly.com/library/view/linux-system-programming/0596009585/ch04s03.html
 reader::reader(const char* filename) {
-  struct stat sb;
-  int fd = ::open(filename, O_RDONLY);
-  if (fd == -1) throw error("open");
-  if (::fstat(fd, &sb) == -1) throw error("fstat");
-  if (!S_ISREG(sb.st_mode)) throw error("not a file");
-  m_len = sb.st_size;
-  m = reinterpret_cast<char*>(::mmap(0, m_len, PROT_READ, MAP_SHARED, fd, 0));
-  if (m == MAP_FAILED) throw error("mmap");
-  if (::close(fd) == -1) throw error("close");
+  if (!(ends_with(filename,".xz") || ends_with(filename,".lzma"))) {
+    mmapped = true;
+    struct stat sb;
+    int fd = ::open(filename, O_RDONLY);
+    if (fd == -1) throw error("open");
+    if (::fstat(fd, &sb) == -1) throw error("fstat");
+    if (!S_ISREG(sb.st_mode)) throw error("not a file");
+    m_len = sb.st_size;
+    m = reinterpret_cast<char*>(::mmap(0,m_len,PROT_READ,MAP_SHARED,fd,0));
+    if (m == MAP_FAILED) throw error("mmap");
+    if (::close(fd) == -1) throw error("close");
+  } else {
+    mmapped = false;
+
+    constexpr size_t buf_len = 1 << 7;
+    m = reinterpret_cast<char*>(malloc(m_len = 1<<10));
+    size_t m_used = 0;
+    FILE* pipe = popen(cat("unxz -c ",filename).c_str(),"r");
+    if (!pipe) throw error("popen");
+
+    for (;;) {
+      const size_t n = fread(m+m_used, 1, buf_len, pipe);
+      m_used += n;
+      if (n < buf_len) break;
+      if (m_used >= m_len)
+        m = reinterpret_cast<char*>(realloc(m,m_len<<=1));
+    }
+    pclose(pipe);
+
+    TEST(m_used)
+  }
+  TEST(m_len)
 
   int nbraces = 0;
   for (data = m;;) {
-    if ((decltype(m_len))(data-m) >= m_len)
+    if (decltype(m_len)(data-m) >= m_len)
       throw error("reached EOF while reading header");
     const char c = *data;
     if (c=='{') ++nbraces;
@@ -103,13 +125,13 @@ reader::reader(const char* filename) {
     else if (nbraces < 0) throw error("unpaired \'}\' in header");
   }
 
-  const auto head = nlohmann::json::parse(m,data);
+  json_head = nlohmann::json::parse(m,data);
   std::vector<type_node::child_t> root_types;
-  for (const auto& val : head.at("root")) {
+  for (const auto& val : json_head.at("root")) {
     auto val_it = val.begin();
     const auto val_end = val.end();
     const std::string name = *val_it;
-    const type_node root_type = y_combinator([this,&head](
+    const type_node root_type = y_combinator([this](
       auto f, const char* begin, const char* end
     ) -> type_node {
       if (begin==end) throw error("blank type name");
@@ -161,14 +183,6 @@ reader::reader(const char* filename) {
             if (c==e) --cnt;
             if (cnt==0) e = '\0';
           } else if (c==',') {
-            /*
-            if (is_union && *_begin=='#' &&
-                std::all_of(_begin+1,s,std::isdigit)) {
-              size_type size = 0; // array length
-              if (s-_begin>1)
-                size = lexical_cast<size_type>(_begin+1,s-_begin);
-              subtypes.push_back({ 0, size, {1,0}, name });
-            } else*/
             subtypes.push_back(f(_begin,s));
             _begin = s+1;
           } else if (c=='(' || c=='[' || c=='{') {
@@ -186,10 +200,6 @@ reader::reader(const char* filename) {
         type = {
           (is_union ? 0 : memlen_sum(subtypes)),
           (size_type)subtypes.size(), {0,is_union}, name };
-        // if (is_union) for (auto x : subtypes) {
-        //   auto& t = x.begin()->type;
-        //   if (t.p) t = type;
-        // }
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
         if (is_union) {
@@ -209,7 +219,8 @@ reader::reader(const char* filename) {
         std::vector<type_node::child_t> subtypes;
         for (const auto& val : [&]() -> auto& {
           try {
-            return head.at("types").at(std::string(name.begin(),name.end()));
+            return json_head.at("types")
+              .at(std::string(name.begin(),name.end()));
           } catch (const std::exception& e) {
             throw error("no definition for type \"",name,'\"');
           }
@@ -226,7 +237,6 @@ reader::reader(const char* filename) {
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       if (strcmp(type.name(),"^")) all_types.emplace_back(type);
-      // return all_types.back();
       return type;
     })(name.c_str(), name.c_str()+name.size());
     for (++val_it; val_it!=val_end; ++val_it)
@@ -239,7 +249,11 @@ reader::reader(const char* filename) {
 void reader::close() {
   type.clean();
   for (auto& type : all_types) type.clean();
-  if (munmap(m,m_len) == -1) throw error("munmap");
+  if (mmapped) {
+    if (munmap(m,m_len) == -1) throw error("munmap");
+  } else {
+    free(m);
+  }
 }
 reader::~reader() {
   try {
@@ -248,8 +262,6 @@ reader::~reader() {
     std::cerr << "Exception in ~reader(): " << e.what() << std::endl;
   }
 }
-
-string_view reader::head() const { return { m, size_t(data-m) }; }
 
 void reader::print_types() const {
   for (const auto& type : all_types) {
