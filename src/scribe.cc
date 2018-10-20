@@ -1,14 +1,5 @@
 #include "ivanp/scribe.hh"
 
-#include <cstdio>
-#include <cctype>
-#include <cstring>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -78,41 +69,7 @@ size_t memlen_sum(const T& xs) {
   return sum;
 }
 
-// https://www.oreilly.com/library/view/linux-system-programming/0596009585/ch04s03.html
-reader::reader(const char* filename) {
-  if (!(ends_with(filename,".xz") || ends_with(filename,".lzma"))) {
-    mmapped = true;
-    struct stat sb;
-    int fd = ::open(filename, O_RDONLY);
-    if (fd == -1) throw error("open");
-    if (::fstat(fd, &sb) == -1) throw error("fstat");
-    if (!S_ISREG(sb.st_mode)) throw error("not a file");
-    m_len = sb.st_size;
-    m = reinterpret_cast<char*>(::mmap(0,m_len,PROT_READ,MAP_SHARED,fd,0));
-    if (m == MAP_FAILED) throw error("mmap");
-    if (::close(fd) == -1) throw error("close");
-  } else {
-    mmapped = false;
-
-    constexpr size_t buf_len = 1 << 7;
-    m = reinterpret_cast<char*>(malloc(m_len = 1<<10));
-    size_t m_used = 0;
-    FILE* pipe = popen(cat("unxz -c ",filename).c_str(),"r");
-    if (!pipe) throw error("popen");
-
-    for (;;) {
-      const size_t n = fread(m+m_used, 1, buf_len, pipe);
-      m_used += n;
-      if (n < buf_len) break;
-      if (m_used >= m_len)
-        m = reinterpret_cast<char*>(realloc(m,m_len<<=1));
-    }
-    pclose(pipe);
-
-    TEST(m_used)
-  }
-  TEST(m_len)
-
+reader::reader(char* file, size_t flen): m(file), m_len(flen) {
   int nbraces = 0;
   for (data = m;;) {
     if (decltype(m_len)(data-m) >= m_len)
@@ -246,21 +203,9 @@ reader::reader(const char* filename) {
   std::move(root_types.begin(),root_types.end(),type.begin());
 }
 
-void reader::close() {
+reader::~reader() {
   type.clean();
   for (auto& type : all_types) type.clean();
-  if (mmapped) {
-    if (munmap(m,m_len) == -1) throw error("munmap");
-  } else {
-    free(m);
-  }
-}
-reader::~reader() {
-  try {
-    close();
-  } catch (const std::exception& e) {
-    std::cerr << "Exception in ~reader(): " << e.what() << std::endl;
-  }
 }
 
 void reader::print_types() const {

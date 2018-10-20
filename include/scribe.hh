@@ -310,12 +310,10 @@ class reader: public value_node {
   size_t m_len;
   std::vector<type_node> all_types;
   nlohmann::json json_head;
-  bool mmapped;
 public:
-  reader(const char* filename);
-  reader(const std::string& filename): reader(filename.c_str()) { }
+  enum class tag { mmap, pipe };
+  reader(char* file, size_t flen);
   ~reader();
-  void close();
 
   const nlohmann::json& head() const noexcept { return json_head; }
   string_view head_str() const { return { m, size_t(data-m) }; }
