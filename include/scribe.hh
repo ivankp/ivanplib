@@ -348,7 +348,8 @@ public:
   string_view head_str() const { return { m, size_t(data-m) }; }
   void print_types() const;
   type_node root_type() const noexcept { return type; }
-  void* data_ptr() const { return data; }
+  char* data_ptr() const { return data; }
+  size_t data_len() const { return m_len - (data-m); }
 
   operator bool() const noexcept { return m; }
 };
