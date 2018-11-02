@@ -220,6 +220,8 @@ public:
   size_type size() const;
   bool is_array() const;
   bool is_union() const;
+  bool is_fundamental() const;
+  bool is_null() const;
   size_type num_children() const;
   const child_t* begin() const;
   const child_t* end() const;
@@ -234,6 +236,8 @@ struct type_node::child_t {
 struct type_node::flags_t {
   bool is_array : 1;
   bool is_union : 1;
+  bool is_fundamental : 1;
+  flags_t() { memset(this, 0, sizeof(flags_t)); }
 };
 struct type_node::flags_size: std::integral_constant<unsigned,
   (sizeof(size_t)-sizeof(size_type)+sizeof(flags_t)) % sizeof(size_t)
@@ -263,9 +267,9 @@ protected:
 public:
   void* ptr() const { return data; }
   template <typename T>
-  const T& cast() const { return *reinterpret_cast<const T*>(data); }
+  T cast() const { return *reinterpret_cast<std::decay_t<T>*>(data); }
   template <typename T>
-  const T& safe_cast() const {
+  T safe_cast() const {
     const auto& type_name = trait<T>::type_name();
     if (type_name!=type.name()) throw error(
       "cannot cast ",type.name()," to ",type_name);
@@ -303,6 +307,12 @@ public:
     if (n || !type.is_array()) return n;
     else return array_size();
   }
+  size_t memlen() const noexcept { return type.memlen(data); }
+
+  bool operator==(const value_node& r) const noexcept;
+  bool operator!=(const value_node& r) const noexcept {
+    return !operator==(r);
+  }
 };
 
 class reader: public value_node {
@@ -312,15 +322,41 @@ class reader: public value_node {
   nlohmann::json json_head;
 public:
   enum class tag { mmap, pipe };
+  reader(): value_node(), m(nullptr), m_len(0) { }
   reader(char* file, size_t flen);
+  reader(const reader&) = delete;
+  reader& operator=(const reader&) = delete;
+  reader(reader&& o)
+  : value_node(std::move(o)), m(o.m), m_len(o.m_len),
+    all_types(std::move(o.all_types)), json_head(std::move(o.json_head))
+  {
+    o.m = nullptr;
+    o.m_len = 0;
+  }
+  reader& operator=(reader&& o) {
+    value_node::operator=(std::move(o));
+    m = o.m; o.m = nullptr;
+    m_len = o.m_len; o.m_len = 0;
+    all_types = std::move(o.all_types);
+    json_head = std::move(o.json_head);
+    return *this;
+  }
   ~reader();
 
+  nlohmann::json& head() noexcept { return json_head; }
   const nlohmann::json& head() const noexcept { return json_head; }
   string_view head_str() const { return { m, size_t(data-m) }; }
   void print_types() const;
   type_node root_type() const noexcept { return type; }
   void* data_ptr() const { return data; }
+
+  operator bool() const noexcept { return m; }
 };
+
+template <typename T>
+inline decltype(auto) begin(T& x) { return x.begin(); }
+template <typename T>
+inline decltype(auto) end(T& x) { return x.end(); }
 
 }}
 

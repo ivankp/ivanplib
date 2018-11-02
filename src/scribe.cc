@@ -101,16 +101,20 @@ reader::reader(char* file, size_t flen): m(file), m_len(flen) {
       const char c = *s;
       const auto size_len = end-s-1;
       type_node type;
+      type_node::flags_t flags;
+      // memset(&flags, 0, sizeof(flags));
       // array ------------------------------------------------------
       if (c=='#') {
         size_type size = 0; // array length
         if (end-s>1) size = lexical_cast<size_type>(s+1,size_len);
         type_node subtype = f(begin,s);
-        type = { subtype.memlen()*size, size, {1,0}, name };
+        flags.is_array = true;
+        type = { subtype.memlen()*size, size, flags, name };
         type.begin()->type = subtype;
       // fundamental ------------------------------------------------
       } else if (end-s>1 && s==begin && (c=='f'||c=='u'||c=='i')) {
-        type = { lexical_cast<size_type>(s+1,size_len), 0, {0,0}, name };
+        flags.is_fundamental = true;
+        type = { lexical_cast<size_type>(s+1,size_len), 0, flags, name };
       // tuple or union ---------------------------------------------
       } else if (end-s==1 && [](auto begin, auto end){
           const char b = *begin, e = *--end;
@@ -154,9 +158,10 @@ reader::reader(char* file, size_t flen): m(file), m_len(flen) {
           }
         }
         subtypes.push_back(f(_begin,_end));
+        flags.is_union = is_union;
         type = {
           (is_union ? 0 : memlen_sum(subtypes)),
-          (size_type)subtypes.size(), {0,is_union}, name };
+          (size_type)subtypes.size(), flags, name };
         std::transform(subtypes.begin(),subtypes.end(),type.begin(),
           [](auto x) -> type_node::child_t { return { x, { } }; });
         if (is_union) {
@@ -170,7 +175,8 @@ reader::reader(char* file, size_t flen): m(file), m_len(flen) {
         }
       // null -------------------------------------------------------
       } else if (name=="null" || name=="^") {
-        type = { 0, 0, {0,0}, name };
+        flags.is_fundamental = true; // overwritten later for ^
+        type = { 0, 0, flags, name };
       // user defined type ------------------------------------------
       } else {
         std::vector<type_node::child_t> subtypes;
@@ -190,7 +196,7 @@ reader::reader(char* file, size_t flen): m(file), m_len(flen) {
             subtypes.push_back({subtype,*val_it});
         }
         type = {
-          memlen_sum(subtypes), (size_type)subtypes.size(), {0,0}, name };
+          memlen_sum(subtypes), (size_type)subtypes.size(), flags, name };
         std::move(subtypes.begin(),subtypes.end(),type.begin());
       }
       if (strcmp(type.name(),"^")) all_types.emplace_back(type);
@@ -199,13 +205,15 @@ reader::reader(char* file, size_t flen): m(file), m_len(flen) {
     for (++val_it; val_it!=val_end; ++val_it)
       root_types.push_back({root_type,*val_it});
   }
-  type = { memlen_sum(root_types), (size_type)root_types.size(), {0,0}, {} };
+  type = { memlen_sum(root_types), (size_type)root_types.size(), {}, {} };
   std::move(root_types.begin(),root_types.end(),type.begin());
 }
 
 reader::~reader() {
-  type.clean();
-  for (auto& type : all_types) type.clean();
+  if (m) {
+    type.clean();
+    for (auto& type : all_types) type.clean();
+  }
 }
 
 void reader::print_types() const {
@@ -264,6 +272,12 @@ bool type_node::is_array() const {
 bool type_node::is_union() const {
   return flags().is_union;
 }
+bool type_node::is_fundamental() const {
+  return flags().is_fundamental;
+}
+bool type_node::is_null() const {
+  return flags().is_fundamental && memlen()==0;
+}
 size_type type_node::num_children() const {
   return is_array() ? 1 : size();
 }
@@ -291,6 +305,7 @@ const type_node type_node::operator[](size_type i) const {
   return (begin()+(is_array() ? 0 : i))->type;
 }
 
+// resolve length of object at given position
 size_t type_node::memlen(const char* m) const {
   auto len = memlen();
   if (!len) {
@@ -323,6 +338,7 @@ size_t type_node::memlen(const char* m) const {
   return len;
 }
 
+// get by index
 value_node value_node::operator[](size_type key) const {
   auto size = type.size();
   char* m = data;
@@ -339,7 +355,9 @@ value_node value_node::operator[](size_type key) const {
     else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
     return { m, subtype };
   } else if (type.is_union()) {
-    return (**this)[key];
+    auto x = **this;
+    while (x.get_type().is_union()) x = *x;
+    return x[key];
   } else {
     if (key >= size) throw error(
       "index ",key," out of bound in \"",type.name(),"\"");
@@ -350,8 +368,13 @@ value_node value_node::operator[](size_type key) const {
     return { m, a->type };
   }
 }
+// get by name
 value_node value_node::operator[](const char* key) const {
-  if (type.is_union()) return (**this)[key];
+  if (type.is_union()) {
+    auto x = **this;
+    while (x.get_type().is_union()) x = *x;
+    return x[key];
+  }
   char* m = data;
   auto a = type.begin();
   for (const auto _end = type.end();; ++a) {
@@ -363,15 +386,24 @@ value_node value_node::operator[](const char* key) const {
   return { m, a->type };
 }
 
+// get union element
 value_node value_node::operator*() const {
   const auto index = union_index();
   return { data + sizeof(index), (type.begin()+index)->type };
 }
 
+// increment iterator
 value_node::iterator& value_node::iterator::operator++() {
   data += type[index].memlen(data);
   ++index;
   return *this;
+}
+
+// compare values without casting with memcmp
+bool value_node::operator==(const value_node& r) const noexcept {
+  const auto len = memlen();
+  if (r.memlen() != len) return false;
+  return !memcmp(data,r.data,len);
 }
 
 }}
