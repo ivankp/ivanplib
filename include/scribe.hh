@@ -252,8 +252,8 @@ class value_node {
   public:
     iterator(type_node t, char* d): index(0), type(t), data(d) { }
     iterator(size_type i): index(i) { }
-    value_node operator*() const { return { data, type[index] }; }
     iterator& operator++();
+    value_node operator*() const;
     bool operator!=(const iterator& r) const noexcept
     { return index != r.index; }
     bool operator==(const iterator& r) const noexcept
@@ -262,8 +262,10 @@ class value_node {
 protected:
   char* data;
   type_node type;
-  value_node(): data(nullptr), type() { }
-  value_node(char* data, type_node type): data(data), type(type) { }
+  const char* name;
+  value_node(): data(nullptr), type(), name(nullptr) { }
+  value_node(char* data, type_node type, const char* name)
+  : data(data), type(type), name(name) { }
 public:
   void* ptr() const { return data; }
   template <typename T>
@@ -277,6 +279,7 @@ public:
   }
 
   type_node get_type() const { return type; }
+  const char* get_name() const { return name; }
   const char* type_name() const { return type.name(); }
   const char* type_name(size_type i) const { return type[i].name(); }
   value_node operator[](size_type) const;

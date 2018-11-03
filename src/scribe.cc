@@ -349,11 +349,12 @@ value_node value_node::operator[](size_type key) const {
     }
     if (key >= size) throw error(
       "index ",key," out of bound in \"",type.name(),"\"");
-    const auto subtype = type.begin()->type;
+    const auto a = type.begin();
+    const auto subtype = a->type;
     const auto len = subtype.memlen();
     if (len) m += len*key;
     else for (size_type i=0; i<key; ++i) m += subtype.memlen(m);
-    return { m, subtype };
+    return { m, subtype, a->name.c_str() };
   } else if (type.is_union()) {
     auto x = **this;
     while (x.get_type().is_union()) x = *x;
@@ -365,7 +366,7 @@ value_node value_node::operator[](size_type key) const {
     for (const auto _end=a+key; a!=_end; ++a) {
       m += (*a)->memlen(m);
     }
-    return { m, a->type };
+    return { m, a->type, a->name.c_str() };
   }
 }
 // get by name
@@ -383,13 +384,14 @@ value_node value_node::operator[](const char* key) const {
     if (!a->name.empty() && a->name==key) break;
     m += (*a)->memlen(m);
   }
-  return { m, a->type };
+  return { m, a->type, a->name.c_str() };
 }
 
 // get union element
 value_node value_node::operator*() const {
   const auto index = union_index();
-  return { data + sizeof(index), (type.begin()+index)->type };
+  const auto a = type.begin() + index;
+  return { data + sizeof(index), a->type, a->name.c_str() };
 }
 
 // increment iterator
@@ -397,6 +399,12 @@ value_node::iterator& value_node::iterator::operator++() {
   data += type[index].memlen(data);
   ++index;
   return *this;
+}
+
+// dereference iterator
+value_node value_node::iterator::operator*() const {
+  const auto a = (type.begin()+(type.is_array() ? 0 : index));
+  return { data, a->type, a->name.c_str() };
 }
 
 // compare values without casting with memcmp
