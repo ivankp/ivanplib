@@ -267,9 +267,13 @@ protected:
   value_node(char* data, type_node type, const char* name)
   : data(data), type(type), name(name) { }
 public:
-  void* ptr() const { return data; }
+  char* ptr() const { return data; }
   template <typename T>
-  T cast() const { return *reinterpret_cast<std::decay_t<T>*>(data); }
+  std::enable_if_t<!std::is_reference<T>::value,T>
+  cast() const { return *reinterpret_cast<T*>(data); }
+  template <typename T>
+  std::enable_if_t<std::is_reference<T>::value,T>
+  cast() const { return *reinterpret_cast<std::remove_reference_t<T>*>(data); }
   template <typename T>
   T safe_cast() const {
     const auto& type_name = trait<T>::type_name();
