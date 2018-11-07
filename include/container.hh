@@ -107,7 +107,7 @@ inline auto minmax(C&& c) {
   auto m = std::make_pair(init,init);
   for (++it; it!=_end; ++it) {
     const auto& x = *it;
-    if (m.first  > x) m.first  = x;
+    if (x < m.first ) m.first  = x;
     if (m.second < x) m.second = x;
   }
   return m;
