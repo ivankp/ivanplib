@@ -227,6 +227,10 @@ public:
   const child_t* end() const;
   const char* name() const;
   const type_node operator[](size_type i) const;
+  const type_node find(const char* str) const;
+  const type_node find(const std::string& str) const {
+    return find(str.c_str());
+  }
 };
 struct type_node::child_t {
   type_node type;
@@ -365,6 +369,27 @@ template <typename T>
 inline decltype(auto) begin(T& x) { return x.begin(); }
 template <typename T>
 inline decltype(auto) end(T& x) { return x.end(); }
+
+template <typename T>
+inline T& assign_any_value(T& x, const value_node& node) {
+  const char* name = node.type_name();
+  const char t = name[0], s = name[1];
+  if (t=='f') {
+    if (s=='8') x = node.cast<double  >(); else
+    if (s=='4') x = node.cast<float   >();
+  } else if (t=='u') {
+    if (s=='8') x = node.cast<uint64_t>(); else
+    if (s=='4') x = node.cast<uint32_t>(); else
+    if (s=='2') x = node.cast<uint16_t>(); else
+    if (s=='1') x = node.cast<uint8_t >();
+  } else if (t=='i') {
+    if (s=='8') x = node.cast<int64_t >(); else
+    if (s=='4') x = node.cast<int32_t >(); else
+    if (s=='2') x = node.cast<int16_t >(); else
+    if (s=='1') x = node.cast<int8_t  >();
+  }
+  return x;
+}
 
 }}
 

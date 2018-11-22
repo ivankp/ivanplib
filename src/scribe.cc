@@ -304,6 +304,14 @@ const char* type_node::name() const {
 const type_node type_node::operator[](size_type i) const {
   return (begin()+(is_array() ? 0 : i))->type;
 }
+const type_node type_node::find(const char* str) const {
+  const child_t* _end = end();
+  const child_t* child = std::find_if(begin(),_end,[str](const child_t& child){
+    return child.name == str;
+  });
+  if (child==_end) return { };
+  return child->type;
+}
 
 // resolve length of object at given position
 size_t type_node::memlen(const char* m) const {

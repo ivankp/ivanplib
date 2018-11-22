@@ -165,9 +165,7 @@ struct trait<category_bin<Bin,E,Es...>> {
 
 template <typename T>
 struct trait<nlo_bin<T>, std::enable_if_t<!std::is_array<T>::value>> {
-  static std::string type_name() {
-    return "nlo_bin<"+trait<T>::type_name()+">";
-  }
+  static std::string type_name() { return "weights"; }
   static std::string type_def() { return
     "[\"" + trait<T>::type_name() + "#2\",\"w\"],"
     "[\"" + trait<decltype(std::declval<nlo_bin<T>>().n)>::type_name()
@@ -182,9 +180,7 @@ struct trait<nlo_bin<T>, std::enable_if_t<!std::is_array<T>::value>> {
 template <typename T>
 struct trait<nlo_bin<T>, std::enable_if_t<std::is_array<T>::value>> {
   using type = std::remove_extent_t<T>;
-  static std::string type_name() {
-    return "nlo_bin<"+trait<type>::type_name()+"#>";
-  }
+  static std::string type_name() { return "weights"; }
   static std::string type_def() { return
     "[\"" + trait<type>::type_name() + "#2#"
     + std::to_string(nlo_bin<T>::weights.size()) + "\",\"w\"],"
