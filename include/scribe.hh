@@ -231,6 +231,10 @@ public:
   const type_node find(const std::string& str) const {
     return find(str.c_str());
   }
+  const size_type index(const char*) const;
+  const size_type index(const std::string& str) const {
+    return index(str.c_str());
+  }
 };
 struct type_node::child_t {
   type_node type;
