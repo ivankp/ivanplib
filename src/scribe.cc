@@ -306,11 +306,20 @@ const type_node type_node::operator[](size_type i) const {
 }
 const type_node type_node::find(const char* str) const {
   const child_t* _end = end();
-  const child_t* child = std::find_if(begin(),_end,[str](const child_t& child){
+  const child_t* it = std::find_if(begin(),_end,[str](const child_t& child){
     return child.name == str;
   });
-  if (child==_end) return { };
-  return child->type;
+  if (it==_end) return { };
+  return it->type;
+}
+const size_type type_node::index(const char* str) const {
+  const child_t* _begin = begin();
+  const child_t* _end = end();
+  const child_t* it = std::find_if(_begin,_end,[str](const child_t& child){
+    return child.name == str;
+  });
+  if (it==_end) throw error("type \"",name(),"\" has no member \"",str,"\"");
+  return it-_begin;
 }
 
 // resolve length of object at given position
