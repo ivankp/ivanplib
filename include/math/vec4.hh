@@ -59,13 +59,18 @@ struct vec4 {
     if (v[2] > 0) return 10e10;
     else       return -10e10;
   }
+  T rap() const noexcept { return 0.5*std::log((v[3]+v[2])/(v[3]-v[2])); }
   T phi() const noexcept { return std::atan2(v[1],v[0]); }
   T m2() const noexcept { return v[3]*v[3]-mag2(); }
   T m() const noexcept {
     const T m2_ = m2();
     return m2_ >= 0 ? std::sqrt(m2_) : -std::sqrt(-m2_);
   }
-  T rap() const noexcept { return 0.5*std::log((v[3]+v[2])/(v[3]-v[2])); }
+  T et2() const noexcept { return v[3]*v[3] - v[2]*v[2]; }
+  T et() const noexcept {
+    const T et2_ = et2();
+    return et2_ >= 0 ? std::sqrt(et2_) : -std::sqrt(-et2_);
+  }
 
   template <typename U>
   vec4& operator+=(const U& r) noexcept {
