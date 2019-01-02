@@ -212,8 +212,6 @@ private:
   type_node(size_t memlen, size_type size, flags_t flags, string_view name);
   void clean();
   flags_t& flags() const;
-  child_t* begin();
-  child_t* end();
 public:
   size_t memlen() const;
   size_t memlen(const char* /*memory pointer*/) const;
@@ -223,6 +221,8 @@ public:
   bool is_fundamental() const;
   bool is_null() const;
   size_type num_children() const;
+  child_t* begin();
+  child_t* end();
   const child_t* begin() const;
   const child_t* end() const;
   const char* name() const;
