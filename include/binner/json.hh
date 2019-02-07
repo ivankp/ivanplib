@@ -2,7 +2,7 @@
 #define IVANP_BINNER_JSON_HH
 
 #include <ostream>
-#include "ivanp/binner.hh"
+#include "ivanp/binner/binner.hh"
 #include "ivanp/unfold.hh"
 
 namespace ivanp {
