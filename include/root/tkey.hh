@@ -42,11 +42,6 @@ inline list_cast<TKey> get_keys(TDirectory* dir) noexcept {
 }
 #endif
 
-template <typename T>
-inline T* key_cast(TKey& key) {
-  return dynamic_cast<T*>(key.ReadObj());
-}
-
 inline const TClass* get_class(const char* name) {
   using namespace std::string_literals;
   const TClass* class_ptr = TClass::GetClass(name);
@@ -60,6 +55,17 @@ inline const TClass* get_class(const TKey& key) {
 template <typename T>
 inline bool inherits_from(const TClass* c) {
   return c->InheritsFrom(T::Class());
+}
+
+template <typename T>
+inline T* key_cast(TKey& key) {
+  return dynamic_cast<T*>(key.ReadObj());
+}
+template <typename T>
+inline T* safe_key_cast(TKey& key) {
+  if (inherits_from<T>(get_class(key)))
+    return dynamic_cast<T*>(key.ReadObj());
+  else return nullptr;
 }
 
 #endif
