@@ -144,7 +144,7 @@ template <bool Use, bool Uf, typename Bins, typename F>
 inline std::enable_if_t<Use> set_weight(TH1* h, const Bins& bins, F get) {
   Double_t *val = dynamic_cast<TArrayD*>(h)->GetArray();
   size_t i = !Uf;
-  for (const auto& bin : bins) val[i] = get.val(bin), ++i;
+  for (const auto& bin : bins) { val[i] = get.val(bin); ++i; }
 }
 
 template <bool Use, bool Uf, typename Bins, typename F>
@@ -154,7 +154,7 @@ inline std::enable_if_t<Use> set_sumw2(TH1* h, const Bins& bins, F get) {
   h->Sumw2();
   Double_t *err2 = h->GetSumw2()->GetArray();
   size_t i = !Uf;
-  for (const auto& bin : bins) err2[i] = get.err2(bin), ++i;
+  for (const auto& bin : bins) { err2[i] = get.err2(bin); ++i; }
 }
 
 template <bool Use, typename Bins, typename F>
@@ -196,6 +196,9 @@ auto* to_root(
 
   using traits = detail::bin_converter_traits<F,Bin>;
   using under  = typename std::tuple_element_t<0,std::tuple<Ax...>>::under;
+
+  static_assert(traits::has_weight,
+    "no weight variable found for a bin type");
 
   detail::set_weight<traits::has_weight,under::value>(h, hist.bins(), convert);
   detail::set_sumw2 <traits::has_sumw2, under::value>(h, hist.bins(), convert);

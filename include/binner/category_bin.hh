@@ -57,6 +57,15 @@ struct category_bin {
       "given enum type does not correspond to a category");
     return bin_type::template id<_E>(i);
   }
+
+  template <typename T = bin_type>
+  std::enable_if_t<!std::is_same<T,Bin>::value,const Bin&> operator*() const {
+    return *bins AT(_id);
+  }
+  template <typename T = bin_type>
+  std::enable_if_t< std::is_same<T,Bin>::value,const Bin&> operator*() const {
+    return bins AT(_id);
+  }
 };
 
 template <typename Bin, typename E, typename... Es>
