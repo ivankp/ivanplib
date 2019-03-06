@@ -26,7 +26,7 @@ class match {
 
   match& expand() {
     delete[] subs;
-    subs = new int[(nalloc*=2)*3];
+    subs = new int[(nalloc*=2)];
     return *this;
   }
 
@@ -46,8 +46,35 @@ class match {
   };
 
 public:
-  match(unsigned nalloc=4): n(0), nalloc(nalloc), subs(new int[nalloc*3]) { }
-  ~match() { delete[] subs; }
+  match(unsigned nmax=4): n(0), nalloc(nmax*3), subs(new int[nalloc]) { }
+  ~match() { if (subs) delete[] subs; }
+
+  match(const match& o)
+  : n(o.n), nalloc(n*3), subs(new int[nalloc]), orig(o.orig) { }
+  match(match&& o)
+  : n(o.n), nalloc(o.nalloc), subs(o.subs), orig(o.orig) {
+    o.n = 0;
+    o.nalloc = 0;
+    o.subs = nullptr;
+  }
+  match& operator=(const match& o) {
+    n = o.n;
+    if (nalloc < n*3) {
+      nalloc = n*3;
+      if (subs) delete[] subs;
+      subs = new int[nalloc];
+    }
+    memcpy(subs,o.subs,n*2*sizeof(int));
+    orig = o.orig;
+    return *this;
+  }
+  match& operator=(match&& o) {
+    n = o.n; o.n = 0;
+    nalloc = o.nalloc; o.nalloc = 0;
+    subs = o.subs; o.subs = nullptr;
+    orig = o.orig;
+    return *this;
+  }
 
   iterator begin() const { return { subs, orig }; }
   iterator end() const { return { subs+n*2, orig }; }
@@ -76,10 +103,8 @@ public:
     o.extra = nullptr;
   }
   regex& operator=(regex&& o) {
-    compiled = o.compiled;
-    o.compiled = nullptr;
-    extra = o.extra;
-    o.extra = nullptr;
+    compiled = o.compiled; o.compiled = nullptr;
+    extra = o.extra; o.extra = nullptr;
     return *this;
   }
 
@@ -100,7 +125,7 @@ public:
       compiled, extra, str, len,
       0, // start looking at this point
       0, // options
-      m.subs, m.nalloc*3
+      m.subs, m.nalloc
     );
 
     if (rc < 0) {
