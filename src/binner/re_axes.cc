@@ -3,14 +3,19 @@
 #include <fstream>
 #include <tuple>
 #include <vector>
-#include <regex>
 #include <utility>
 #include <cctype>
+// #include <regex>
 
 #include "ivanp/error.hh"
+#include "ivanp/pcre_wrapper.hh"
+
+#include <iostream>
+#define TEST(var) \
+  std::cout << "\033[36m" #var "\033[0m = " << var << std::endl;
 
 struct re_axes::store: public
-  std::vector<std::pair<std::regex,axis_type>> { };
+  std::vector<std::pair<ivanp::pcre::regex,axis_type>> { };
 
 re_axes::re_axes(const std::string& filename): _store(new store) {
 
@@ -67,23 +72,21 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
 
         using axis_ptr = ivanp::abstract_axis<double>*;
 
-        try {
-          _store->emplace_back( std::piecewise_construct,
-            std::forward_as_tuple( re,
-              std::regex::nosubs | std::regex::extended ),
-            std::make_tuple( u
-              ? static_cast<axis_ptr>(
-                  new ivanp::uniform_axis<double,true>(
-                  nums[0], nums[1], nums[2]))
-              : static_cast<axis_ptr>(
-                  new ivanp::container_axis<std::vector<double>,true>(
-                  std::move(nums)))
-            )
-          );
-          re.clear();
-        } catch (const std::regex_error& e) {
-          throw ivanp::error(re,' ',e);
-        }
+        if (re.front()!='^') re = '^' + re;
+        if (re.back()!='$') re += '$';
+
+        _store->emplace_back( std::piecewise_construct,
+          std::tie( re ),
+          std::make_tuple( u
+            ? static_cast<axis_ptr>(
+                new ivanp::uniform_axis<double,true>(
+                nums[0], nums[1], nums[2]))
+            : static_cast<axis_ptr>(
+                new ivanp::container_axis<std::vector<double>,true>(
+                std::move(nums)))
+          )
+        );
+        re.clear();
 
         if (u) nums.clear();
 
@@ -99,9 +102,8 @@ re_axes::re_axes(const std::string& filename): _store(new store) {
 re_axes::~re_axes() { delete _store; }
 
 re_axes::axis_type re_axes::operator[](const std::string& name) const {
-  for (const auto& ra : *_store) {
-    if (std::regex_match( name, ra.first, std::regex_constants::match_any ))
-      return ra.second;
-  }
+  ivanp::pcre::match m;
+  for (auto& ra : *_store)
+    if (ra.first(m,name.c_str(),name.size())) return ra.second;
   throw ivanp::error("No binning found for \"", name, '\"');
 }
