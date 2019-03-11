@@ -52,11 +52,15 @@ struct category_bin {
     return _id = i;
   }
   template <typename _E>
-  static std::enable_if_t<!std::is_same<_E,E>::value,id_type> id(id_type i) {
-    static_assert( sizeof...(Es),
-      "given enum type does not correspond to a category");
+  static std::enable_if_t<
+    !std::is_same<_E,E>::value && sizeof...(Es), id_type
+  > id(id_type i) {
     return bin_type::template id<_E>(i);
   }
+  template <typename _E>
+  static constexpr std::enable_if_t<
+    !std::is_same<_E,E>::value && !sizeof...(Es), id_type
+  > id(id_type) noexcept { return 0; }
 
   template <typename T = bin_type>
   std::enable_if_t<!std::is_same<T,Bin>::value,const Bin&> operator*() const {
