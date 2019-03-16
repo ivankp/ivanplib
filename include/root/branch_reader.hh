@@ -44,7 +44,7 @@ private:
   using type = ivanp::nth_type<I,std::remove_extent_t<Ts>...>;
 
   template <typename T>
-  using reader_type = std::conditional_t<is_array,
+  using reader_type = std::conditional_t< is_array,
     TTreeReaderArray<std::remove_extent_t<T>>,
     TTreeReaderValue<std::remove_extent_t<T>>
   >;
@@ -52,28 +52,28 @@ private:
   char data[ std::max(sizeof(reader_type<Ts>)...) ];
 
   template <size_t I=0>
-  inline std::enable_if_t<(I<sizeof...(Ts)),size_t>
+  std::enable_if_t<(I<sizeof...(Ts)),size_t>
   get_index(const char* type_name) {
     if (!strcmp(root_type_str<type<I>>(),type_name)) return I;
     else return get_index<I+1>(type_name);
   }
   template <size_t I=0>
-  inline std::enable_if_t<(I==sizeof...(Ts)),size_t>
+  std::enable_if_t<(I==sizeof...(Ts)),size_t>
   get_index [[noreturn]] (const char* type_name) {
     throw ivanp::error(ivanp::type_str<branch_reader<Ts...>>(),
       " cannot read ",type_name);
   }
 
   template <size_t I>
-  inline auto cast() { return reinterpret_cast<reader_type<type<I>>*>(data); }
+  auto cast() { return reinterpret_cast<reader_type<type<I>>*>(data); }
 
   template <typename F, size_t I=0>
-  inline std::enable_if_t<(sizeof...(Ts)-I>1)> call(F&& f) {
+  std::enable_if_t<(sizeof...(Ts)-I>1)> call(F&& f) {
     if (index==I) f(cast<I>());
     else call<F,I+1>(std::forward<F>(f));
   }
   template <typename F, size_t I=0>
-  inline std::enable_if_t<(sizeof...(Ts)-I==1)> call(F&& f) {
+  std::enable_if_t<(sizeof...(Ts)-I==1)> call(F&& f) {
     f(cast<I>());
   }
 
@@ -95,19 +95,19 @@ public:
     });
   }
 
-  inline value_type operator*() {
+  value_type& operator*() {
     value_type x;
     call([&](auto* p){ x = **p; });
     return x;
   }
 
-  inline value_type operator[](size_t i) {
+  value_type& operator[](size_t i) {
     value_type x;
     call([&,i](auto* p){ x = (*p)[i]; });
     return x;
   }
 
-  inline const char* GetBranchName() {
+  const char* GetBranchName() {
     const char* x;
     call([&](auto* p){ x = p->GetBranchName(); });
     return x;
@@ -129,8 +129,7 @@ public:
   static constexpr bool is_array = std::is_array<T>::value;
 
 private:
-  using base = std::conditional_t<
-    is_array,
+  using base = std::conditional_t< is_array,
     TTreeReaderArray<value_type>,
     TTreeReaderValue<value_type>>;
 
@@ -138,9 +137,15 @@ public:
   using base::base;
   using base::GetBranchName;
 
-  inline value_type operator*() { return base::operator*(); }
+  value_type& operator*() { return base::operator*(); }
 
-  inline value_type operator[](size_t i) { return base::operator[](i); }
+  template <bool A = is_array, typename V = value_type>
+  std::enable_if_t<A,V&>
+  operator[](size_t i) { return base::operator[](i); }
+
+  template <bool A = is_array, typename V = value_type>
+  std::enable_if_t<!A, decltype(std::declval<V&>()[0])>
+  operator[](size_t i) { return base::operator*()[i]; }
 };
 
 #endif

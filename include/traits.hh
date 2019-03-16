@@ -47,6 +47,7 @@ IVANP_MAKE_OP_TRAIT_ANY( is_callable, std::declval<T&>()(std::declval<Args>()...
 IVANP_MAKE_OP_TRAIT_ANY( is_constructible, T(std::declval<Args>()...) )
 
 IVANP_MAKE_OP_TRAIT_2( is_assignable, std::declval<T1&>()=std::declval<T2>() )
+IVANP_MAKE_OP_TRAIT_1( is_indexable, std::declval<T&>()[0] )
 
 IVANP_MAKE_OP_TRAIT_1( has_pre_increment,  ++std::declval<T&>() )
 IVANP_MAKE_OP_TRAIT_1( has_post_increment, std::declval<T&>()++ )
