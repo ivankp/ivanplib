@@ -5,10 +5,9 @@
 #include <TMinuit.h>
 
 template <typename F>
-class minuit final: public TMinuit {
+struct minuit final: public TMinuit {
   F f;
 
-public:
   minuit(unsigned npar, const F& f): TMinuit(npar), f(f) { }
   minuit(unsigned npar, F&& f): TMinuit(npar), f(std::move(f)) { }
   minuit(minuit&& r): TMinuit(r.fNpar), f(std::move(r.f)) { }

@@ -101,52 +101,59 @@ public:
   { print(); }
   ~timed_counter() { print(); std::cout << std::endl; }
 
-  inline void reset(value_type i, value_type n) {
+  void reset(value_type i, value_type n) {
     cnt = i;
     cnt_start = i;
     cnt_end = n;
     start = clock_type::now();
     last = start;
   }
-  inline void reset(value_type n) { reset(0,n); }
+  void reset(value_type n) { reset(0,n); }
 
-  inline bool ok() const noexcept { return cmp(cnt,cnt_end); }
-  inline bool operator!() const noexcept { return !ok(); }
+  bool ok() const noexcept { return cmp(cnt,cnt_end); }
+  bool operator!() const noexcept { return !ok(); }
 
   // prefix
-  inline value_type operator++() { print_check(); return ++cnt; }
-  inline value_type operator--() { print_check(); return --cnt; }
+  value_type operator++() { print_check(); return ++cnt; }
+  value_type operator--() { print_check(); return --cnt; }
 
   // postfix
-  inline value_type operator++(int) { print_check(); return cnt++; }
-  inline value_type operator--(int) { print_check(); return cnt--; }
+  value_type operator++(int) { print_check(); return cnt++; }
+  value_type operator--(int) { print_check(); return cnt--; }
 
   template <typename T>
-  inline value_type operator+= (T i) { print_check(); return cnt += i; }
+  value_type operator+= (T i) { print_check(); return cnt += i; }
   template <typename T>
-  inline value_type operator-= (T i) { print_check(); return cnt -= i; }
+  value_type operator-= (T i) { print_check(); return cnt -= i; }
 
   template <typename T>
-  inline bool operator== (T i) const noexcept { return cnt == i; }
+  bool operator== (T i) const noexcept { return cnt == i; }
   template <typename T>
-  inline bool operator!= (T i) const noexcept { return cnt != i; }
+  bool operator!= (T i) const noexcept { return cnt != i; }
   template <typename T>
-  inline bool operator<  (T i) const noexcept { return cnt <  i; }
+  bool operator<  (T i) const noexcept { return cnt <  i; }
   template <typename T>
-  inline bool operator<= (T i) const noexcept { return cnt <= i; }
+  bool operator<= (T i) const noexcept { return cnt <= i; }
   template <typename T>
-  inline bool operator>  (T i) const noexcept { return cnt >  i; }
+  bool operator>  (T i) const noexcept { return cnt >  i; }
   template <typename T>
-  inline bool operator>= (T i) const noexcept { return cnt >= i; }
+  bool operator>= (T i) const noexcept { return cnt >= i; }
 
   // cast to integral type
-  template <typename T> inline operator T () {
+  template <typename T> operator T () {
     static_assert( std::is_integral<T>::value,
       "Cannot cast timed_counter to a non-integral type" );
     return cnt;
   }
 
-  friend inline std::ostream&
+  value_type operator*() const { return cnt; }
+
+  template <typename T>
+  friend auto operator+(const timed_counter& c, T n) -> decltype(c.cnt+n) {
+    return c.cnt + n;
+  }
+
+  friend std::ostream&
   operator<<(std::ostream& os, const timed_counter& tc)
   noexcept(noexcept(os << tc.cnt)) {
     return (os << tc.cnt);
