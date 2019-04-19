@@ -163,6 +163,23 @@ template <typename...> struct pack_is_tuple : std::false_type { };
 template <typename T> struct pack_is_tuple<T>
 : std::integral_constant<bool, is_std_tuple<T>::value> { };
 
+// make from tuple ==================================================
+namespace detail {
+template <typename T, typename Tuple, size_t... I>
+constexpr T make_from_tuple_impl(Tuple&& t, std::index_sequence<I...>) {
+  using std::get;
+  return T(get<I>(std::forward<Tuple>(t))...);
+}
+} // namespace detail
+
+template <typename T, typename Tuple>
+constexpr T make_from_tuple(Tuple&& t) {
+  return detail::make_from_tuple_impl<T>(
+    std::forward<Tuple>(t),
+    tuple_indices<T>{}
+  );
+}
+
 } // end namespace ivanp
 
 #endif
