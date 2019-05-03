@@ -62,14 +62,27 @@ struct category_bin {
     !std::is_same<_E,E>::value && !sizeof...(Es), id_type
   > id(id_type) noexcept { return 0; }
 
-  template <typename T = bin_type>
-  std::enable_if_t<!std::is_same<T,Bin>::value,const Bin&> operator*() const {
+  using is_base = std::integral_constant<bool,!sizeof...(Es)>;
+
+  template <typename T = is_base>
+  std::enable_if_t<!T::value,const Bin&> operator*() const {
     return *bins AT(_id);
   }
-  template <typename T = bin_type>
-  std::enable_if_t< std::is_same<T,Bin>::value,const Bin&> operator*() const {
+  template <typename T = is_base>
+  std::enable_if_t<!T::value,Bin&> operator*() {
+    return *bins AT(_id);
+  }
+  template <typename T = is_base>
+  std::enable_if_t< T::value,const Bin&> operator*() const {
     return bins AT(_id);
   }
+  template <typename T = is_base>
+  std::enable_if_t< T::value,Bin&> operator*() {
+    return bins AT(_id);
+  }
+
+  Bin* operator->() { return &**this; }
+  const Bin* operator->() const { return &**this; }
 };
 
 template <typename Bin, typename E, typename... Es>

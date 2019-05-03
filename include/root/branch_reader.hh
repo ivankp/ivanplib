@@ -95,13 +95,13 @@ public:
     });
   }
 
-  value_type& operator*() {
+  value_type operator*() {
     value_type x;
     call([&](auto* p){ x = **p; });
     return x;
   }
 
-  value_type& operator[](size_t i) {
+  value_type operator[](size_t i) {
     value_type x;
     call([&,i](auto* p){ x = (*p)[i]; });
     return x;

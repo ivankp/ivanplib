@@ -5,7 +5,6 @@
 #include <vector>
 #include <utility>
 #include <cctype>
-// #include <regex>
 
 #include "ivanp/error.hh"
 #include "ivanp/pcre_wrapper.hh"

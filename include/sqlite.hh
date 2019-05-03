@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <exception>
 #include <type_traits>
+#include <cstring>
 
 namespace ivanp {
 
@@ -46,6 +47,9 @@ public:
     if (sqlite3_open(fname,&db) != SQLITE_OK)
       throw error(errmsg());
   }
+  template <typename T, typename = std::enable_if_t< std::is_convertible<
+    decltype(std::declval<const T&>().data()), const char* >::value >>
+  sqlite(const T& fname): sqlite(static_cast<const char*>(fname.data())) { }
   ~sqlite() { sqlite3_close(db); }
 
   sqlite(const sqlite&) = delete;
@@ -79,6 +83,65 @@ public:
   sqlite& operator()(const char* sql, F&& f) {
     return exec(sql,std::forward<F>(f));
   }
+
+  class value {
+    sqlite3_value* p;
+  public:
+    value(): p(nullptr) { }
+    value(sqlite3_value* p): p(sqlite3_value_dup(p)) { }
+    ~value() { sqlite3_value_free(p); }
+    value(const value& o) noexcept: p(sqlite3_value_dup(o.p)) { }
+    value(value&& o) noexcept: p(o.p) { o.p = nullptr; }
+    value& operator=(const value& o) noexcept {
+      p = sqlite3_value_dup(o.p);
+      return *this;
+    }
+    value& operator=(value&& o) noexcept {
+      p = o.p;
+      o.p = nullptr;
+      return *this;
+    }
+    int type() const noexcept { return sqlite3_value_type(p); }
+    int bytes() const noexcept { return sqlite3_value_bytes(p); }
+    int as_int() const noexcept { return sqlite3_value_int(p); }
+    int as_double() const noexcept { return sqlite3_value_double(p); }
+    const void* as_blob() const noexcept { return sqlite3_value_blob(p); }
+    const char* as_text() const noexcept {
+      return reinterpret_cast<const char*>(sqlite3_value_text(p));
+    }
+
+    bool operator==(const value& o) const noexcept {
+      auto t = type();
+      if (t != o.type()) t = SQLITE_BLOB;
+      switch (t) {
+        case SQLITE_INTEGER: return as_int() == o.as_int();
+        case SQLITE_FLOAT: return as_double() == o.as_double();
+        case SQLITE_NULL: return true;
+        default: { // TEXT or BLOB
+          const auto len = bytes();
+          if (o.bytes() != len) return false;
+          return !memcmp(as_blob(),o.as_blob(),len);
+        }
+      }
+    }
+    bool operator<(const value& o) const noexcept {
+      auto t = type();
+      if (t != o.type()) t = SQLITE_BLOB;
+      switch (t) {
+        case SQLITE_INTEGER: return as_int() < o.as_int();
+        case SQLITE_FLOAT: return as_double() < o.as_double();
+        case SQLITE_NULL: return false;
+        default: { // TEXT or BLOB
+          const auto len = bytes();
+          const auto len_o = o.bytes();
+          auto cmp = memcmp(as_blob(),o.as_blob(),
+            (len < len_o ? len : len_o) );
+          return cmp ? (cmp < 0) : (len < len_o);
+        }
+      }
+    }
+    bool operator!=(const value& o) const noexcept { return !((*this) == o); }
+  };
 
   class stmt {
     sqlite3_stmt *p = nullptr;
@@ -143,8 +206,8 @@ public:
         throw error(errmsg());
       return *this;
     }
-    stmt& bind(int i, const char* x, bool trans=true) {
-      if (sqlite3_bind_text(p, i, x, -1,
+    stmt& bind(int i, const char* x, int n=-1, bool trans=true) {
+      if (sqlite3_bind_text(p, i, x, n,
             trans ? SQLITE_TRANSIENT : SQLITE_STATIC
       ) != SQLITE_OK)
         throw error(errmsg());
@@ -164,11 +227,11 @@ public:
     }
 
     template <typename T>
-    auto bind(int i, const T& x, bool trans=true) -> std::enable_if_t<
+    auto bind(int i, const T& x, int n=-1, bool trans=true) -> std::enable_if_t<
       std::is_convertible<decltype(x.data()),const char*>::value,
       stmt
     >& {
-      return bind(i,static_cast<const char*>(x.data()),trans);
+      return bind(i,static_cast<const char*>(x.data()),n,trans);
     }
 
     // column -------------------------------------------------------
@@ -184,11 +247,14 @@ public:
     sqlite3_int64 column_int64(int i) {
       return sqlite3_column_int64(p, i);
     }
-    auto column_text(int i) {
-      return sqlite3_column_text(p, i);
+    const char* column_text(int i) {
+      return reinterpret_cast<const char*>(sqlite3_column_text(p, i));
     }
     const void* column_blob(int i) {
       return sqlite3_column_blob(p, i);
+    }
+    value column_value(int i) {
+      return sqlite3_column_value(p, i);
     }
     int column_bytes(int i) {
       return sqlite3_column_bytes(p, i);
@@ -200,6 +266,7 @@ public:
   };
 
   stmt prepare(const char* sql) { return { db, sql }; }
+
 };
 
 }

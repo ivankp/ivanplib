@@ -11,6 +11,11 @@
 #include <memory>
 #include <limits>
 
+// TODO:
+// - keep only container, uniform, and abstract axes
+// - make axes iterable, i.e. uniform axis is a generator
+// - rework edge_proxy
+
 namespace ivanp {
 
 using axis_size_type = unsigned;
@@ -87,6 +92,27 @@ public:
 
   virtual bool is_uniform() const = 0;
 };
+
+template <typename A, typename B>
+bool axis_cmp(const A& a, const B& b) noexcept {
+  if (a.is_uniform() && b.is_uniform()) {
+    if (a.min() < b.min()) return true;
+    if (b.min() < a.min()) return false;
+    if (a.max() < b.max()) return true;
+    if (b.max() < a.max()) return false;
+    return a.nbins() < b.nbins();
+  } else {
+    axis_size_type first1=0, last1=a.nedges(),
+                   first2=0, last2=b.nedges();
+    for (; (first1!=last1) && (first2!=last2); ++first1, ++first2) {
+      const auto edge1 = a.edge(first1);
+      const auto edge2 = b.edge(first2);
+      if (edge1 < edge2) return true;
+      if (edge2 < edge1) return false;
+    }
+    return (first1==last1) && (first2!=last2);
+  }
+}
 
 // Blank axis base ==================================================
 
@@ -400,6 +426,30 @@ public:
   inline edge_ptype upper(size_type i) const { return _ref->upper(i); }
 
   inline bool is_uniform() const noexcept { return _ref->is_uniform(); }
+
+private:
+  template <typename T, typename R, bool I, typename = bool>
+  struct same_ref_as_impl {
+    static bool op(const axis_ref&, const R&) noexcept { return false; }
+  };
+  template <typename T, typename R, bool I>
+  struct same_ref_as_impl<T,R,I, std::decay_t<decltype(
+    std::declval<const axis_ref&>() == std::declval<const R&>()
+  )>> {
+    static bool op(const axis_ref& a, const R& b) noexcept { return a == b; }
+  };
+
+public:
+  template <typename T, typename R, bool I>
+  bool same_ref_as(const ref_axis<T,R,I>& r) const noexcept {
+    return same_ref_as_impl<T,R,I>::op(_ref,r._ref);
+  }
+
+  template <typename T, typename R, bool I>
+  bool operator<(const ref_axis<T,R,I>& r) const noexcept {
+    if (same_ref_as(r)) return false;
+    return axis_cmp(*this,r);
+  }
 
 };
 
