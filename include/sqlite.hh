@@ -8,6 +8,19 @@
 
 namespace ivanp {
 
+namespace detail {
+template <typename T>
+using is_string_like = std::integral_constant<bool,
+  std::is_convertible<
+    decltype(std::declval<const T&>().data()), const char* >::value >;
+template <typename S, typename T=void>
+using enable_for_strings = std::enable_if_t< is_string_like<S>::value, T >;
+
+const char* c_str(const char* s) noexcept { return s; }
+template <typename T>
+enable_for_strings<T,const char*> c_str(const T& s) noexcept { return s.data(); }
+}
+
 class sqlite {
   sqlite3 *db;
 
@@ -47,8 +60,7 @@ public:
     if (sqlite3_open(fname,&db) != SQLITE_OK)
       throw error(errmsg());
   }
-  template <typename T, typename = std::enable_if_t< std::is_convertible<
-    decltype(std::declval<const T&>().data()), const char* >::value >>
+  template <typename T, typename = detail::enable_for_strings<T>>
   sqlite(const T& fname): sqlite(static_cast<const char*>(fname.data())) { }
   ~sqlite() { sqlite3_close(db); }
 
@@ -61,30 +73,29 @@ public:
     return *this;
   }
 
-  sqlite& exec(const char* sql) {
+  template <typename T>
+  sqlite& exec(const T& sql) {
     char* err;
-    if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK)
-      throw error(err);
+    if (sqlite3_exec(db, detail::c_str(sql), nullptr, nullptr, &err)
+        != SQLITE_OK) throw error(err);
     return *this;
   }
-  template <typename F>
+  template <typename T, typename F>
   sqlite& exec(const char* sql, F&& f) {
     char* err;
-    if (sqlite3_exec( db, sql,
+    if (sqlite3_exec( db, detail::c_str(sql),
           exec_callback<F>, reinterpret_cast<void*>(&f), &err
     ) != SQLITE_OK) throw error(err);
     return *this;
   }
 
-  sqlite& operator()(const char* sql) {
-    return exec(sql);
-  }
-  template <typename F>
-  sqlite& operator()(const char* sql, F&& f) {
-    return exec(sql,std::forward<F>(f));
-  }
+  template <typename... T>
+  sqlite& operator()(T&&... args) { return exec(std::forward<T>(args)...); }
+
+  class stmt;
 
   class value {
+    friend class stmt;
     sqlite3_value* p;
   public:
     value(): p(nullptr) { }
@@ -186,17 +197,23 @@ public:
     }
 
     // bind ---------------------------------------------------------
-    stmt& bind(int i, double x) {
+    template <typename T>
+    std::enable_if_t<std::is_floating_point<T>::value,stmt>&
+    bind(int i, T x) {
       if (sqlite3_bind_double(p, i, x) != SQLITE_OK)
         throw error(errmsg());
       return *this;
     }
-    stmt& bind(int i, int x) {
+    template <typename T>
+    std::enable_if_t<std::is_integral<T>::value && (sizeof(T)<=sizeof(int)),
+    stmt>& bind(int i, T x) {
       if (sqlite3_bind_int(p, i, x) != SQLITE_OK)
         throw error(errmsg());
       return *this;
     }
-    stmt& bind(int i, sqlite3_int64 x) {
+    template <typename T>
+    std::enable_if_t<std::is_integral<T>::value && (sizeof(T)>sizeof(int)),
+    stmt>& bind(int i, T x) {
       if (sqlite3_bind_int64(p, i, x) != SQLITE_OK)
         throw error(errmsg());
       return *this;
@@ -225,13 +242,35 @@ public:
         throw error(errmsg());
       return *this;
     }
+    stmt& bind(int i, const value& x) {
+      if (sqlite3_bind_value(p, i, x.p) != SQLITE_OK)
+        throw error(errmsg());
+      return *this;
+    }
 
     template <typename T>
-    auto bind(int i, const T& x, int n=-1, bool trans=true) -> std::enable_if_t<
+    auto bind(int i, const T& x, int n=-1, bool trans=true)
+    -> std::enable_if_t<
       std::is_convertible<decltype(x.data()),const char*>::value,
       stmt
     >& {
       return bind(i,static_cast<const char*>(x.data()),n,trans);
+    }
+
+  private:
+    template <size_t I=0, typename T, typename... TT>
+    void bind_row_impl(T&& x, TT&&... xx) {
+      bind(I+1,std::forward<T>(x));
+      bind_row_impl<I+1>(std::forward<TT>(xx)...);
+    }
+    template <size_t I=0, typename T>
+    void bind_row_impl(T&& x) { bind(I+1,std::forward<T>(x)); }
+  public:
+    template <typename... T>
+    stmt& bind_row(T&&... x) {
+      bind_row_impl(std::forward<T>(x)...);
+      step();
+      return reset();
     }
 
     // column -------------------------------------------------------
@@ -265,7 +304,8 @@ public:
     }
   };
 
-  stmt prepare(const char* sql) { return { db, sql }; }
+  template <typename T>
+  stmt prepare(const T& sql) { return { db, detail::c_str(sql) }; }
 
 };
 
