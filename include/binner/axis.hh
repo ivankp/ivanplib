@@ -11,6 +11,8 @@
 #include <memory>
 #include <limits>
 
+#include "ivanp/tuple_for_each.hh"
+
 // TODO:
 // - keep only container, uniform, and abstract axes
 // - make axes iterable, i.e. uniform axis is a generator
@@ -31,6 +33,7 @@ private:
   T x;
 
 public:
+  edge_proxy() { }
   edge_proxy(state s): s{s}, x{
     s==pinf ?  std::numeric_limits<T>::infinity() :
     s==minf ? -std::numeric_limits<T>::infinity() : T{ }
@@ -562,6 +565,78 @@ public:
 
   constexpr bool is_uniform() const noexcept { return false; }
 
+};
+
+// ==================================================================
+
+template <typename... Axes>
+class union_axis {
+public:
+  std::tuple<Axes...> axes;
+  using size_type = axis_size_type;
+  using edge_type = std::common_type_t<typename Axes::edge_type...>;
+  using edge_ptype = edge_proxy<edge_type>;
+
+  union_axis(Axes&&... axes): axes{ std::forward<Axes>(axes)... } { }
+
+  size_type nbins() const {
+    size_type n = 0;
+    for_each(axes,[&n](const auto& a){ n += a.nbins(); });
+    return n;
+  }
+  size_type nedges() const {
+    size_type n = 0;
+    for_each(axes,[&n](const auto& a){ n += a.nedges(); });
+    return n;
+  }
+
+  size_type find_bin(edge_type x) const {
+    size_type i = 0;
+    if (!for_each(axes,[&](const auto& a){
+      size_type j = a.find_bin(x);
+      if (j==0) { i = 0; return true; }
+      const auto n = a.nbins();
+      if (j<n+1) { i += j; return true; }
+      i += n; return false;
+    })) ++i;
+    return i;
+  }
+  size_type vfind_bin(edge_type x) const { return find_bin(x); }
+
+  edge_type edge(size_type i) const {
+    edge_type e;
+    if (for_each(axes,[&](const auto& a){
+      const auto n = a.nedges();
+      if (i<n) { e = a.edge(i); return true; }
+      i -= n; return false;
+    })) return e;
+    return max();
+  }
+  edge_type min() const { return std::get<0>(axes).min(); }
+  edge_type max() const { return std::get<sizeof...(Axes)-1>(axes).max(); }
+  edge_ptype lower(size_type i) const {
+    if (i==0) return edge_ptype::minf;
+    size_type n;
+    edge_ptype edge;
+    if (!for_each(axes,[&](const auto& a){
+      n = a.nbins();
+      if (i<=n) { edge = a.lower(i); return true; }
+      i -= n; return false;
+    })) edge = max();
+    return edge;
+  }
+  edge_ptype upper(size_type i) const {
+    if (i==0) return std::get<0>(axes).upper(0);
+    edge_ptype edge;
+    if (!for_each(axes,[&](const auto& a){
+      const auto n = a.nbins();
+      if (i<=n) { edge = a.upper(i); return true; }
+      i -= n; return false;
+    })) return edge_ptype::pinf;
+    return edge;
+  }
+
+  constexpr bool is_uniform() const { return false; }
 };
 
 // ==================================================================
