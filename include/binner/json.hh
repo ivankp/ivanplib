@@ -30,7 +30,7 @@ template <
   size_t... I>
 void to_json(
   std::ostream& os,
-  const ivanp::binner<Bin,AxesSpecs,Container,Filler>& hist,
+  const binner<Bin,AxesSpecs,Container,Filler>& hist,
   std::index_sequence<I...>
 ) {
   os << std::boolalpha << "{\"axes\":[";
@@ -58,9 +58,9 @@ template <
   typename Filler>
 void to_json(
   std::ostream& os,
-  const ivanp::binner<Bin,AxesSpecs,Container,Filler>& hist
+  const binner<Bin,AxesSpecs,Container,Filler>& hist
 ) {
-  return detail::to_json(os,hist,
+  detail::to_json(os,hist,
     std::make_index_sequence<std::tuple_size<AxesSpecs>::value>{});
 }
 

@@ -18,6 +18,13 @@
 // - make axes iterable, i.e. uniform axis is a generator
 // - rework edge_proxy
 
+#ifndef IVANP_AXIS_INFTY_STR
+#define IVANP_AXIS_INFTY_STR "∞"
+#endif
+#ifndef IVANP_AXIS_MINFTY_STR
+#define IVANP_AXIS_MINFTY_STR "-" IVANP_AXIS_INFTY_STR
+#endif
+
 namespace ivanp {
 
 using axis_size_type = unsigned;
@@ -55,8 +62,8 @@ public:
   friend std::ostream& operator<<(std::ostream& os, const edge_proxy& p) {
     switch (p.s) {
       case   ok: os << p.x;  break;
-      case pinf: os <<  "∞"; break;
-      case minf: os << "-∞"; break;
+      case pinf: os << IVANP_AXIS_INFTY_STR; break;
+      case minf: os << IVANP_AXIS_MINFTY_STR; break;
     }
     return os;
   }
