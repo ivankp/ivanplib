@@ -78,6 +78,10 @@ public:
 
   iterator begin() const { return { subs, orig }; }
   iterator end() const { return { subs+n*2, orig }; }
+
+  std::array<const char*,2> operator[](unsigned i) const {
+    return { orig+subs[i*2], orig+subs[i*2+1] };
+  }
 };
 
 class regex {
@@ -148,6 +152,9 @@ public:
     }
 
     return true;
+  }
+  bool operator()(match& m, const std::string& str) {
+    return operator()(m,str.c_str(),str.size());
   }
 };
 
