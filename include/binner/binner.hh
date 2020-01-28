@@ -182,11 +182,11 @@ private:
   inline size_type fill_bin_tuple(size_type bin,
     const std::tuple<T...>& t, std::index_sequence<I...>
   ) {
-    static_assert(
-      ivanp::is_callable<
-        filler, decltype(_bins[bin]), decltype(std::get<I>(t))...
-      >::value,
-      "cannot call bin filler for given arguments");
+    // static_assert(
+    //   ivanp::is_callable<
+    //     filler, decltype(_bins[bin]), decltype(std::get<I>(t))...
+    //   >::value,
+    //   "cannot call bin filler for given arguments");
     filler::fill(_bins[bin], std::get<I>(t)...);
     return bin;
   }
