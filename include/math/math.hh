@@ -5,10 +5,14 @@
 
 namespace ivanp { namespace math {
 
-template <typename T> [[ gnu::const ]]
-constexpr auto sq(T x) noexcept { return x*x; }
-template <typename T, typename... TT> [[ gnu::const ]]
-constexpr auto sq(T x, TT... xx) noexcept { return sq(x)+sq(xx...); }
+template <typename T>
+[[ gnu::const, gnu::always_inline ]]
+constexpr decltype(auto) sq(const T& x) noexcept
+{ return x*x; }
+template <typename T, typename... TT>
+[[ gnu::const, gnu::always_inline ]]
+constexpr decltype(auto) sq(const T& x, const TT&... xx) noexcept
+{ return sq(x)+sq(xx...); }
 
 template <typename... TT> [[ gnu::const ]]
 constexpr auto qadd(TT... xx) noexcept { return std::sqrt(sq(xx...)); }
