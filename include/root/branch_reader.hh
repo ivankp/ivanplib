@@ -1,12 +1,14 @@
+// ------------------------------------------------------------------
+// Class template for reading TTree branches of any of specified types
+// Works similarly to std::variant
+// Writted by Ivan Pogrebnyak
+// ------------------------------------------------------------------
+
 #ifndef BRANCH_READER_HH
 #define BRANCH_READER_HH
 
 #include <tuple>
 #include <algorithm>
-#include <cstring>
-
-#include <boost/preprocessor/stringize.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
 
 #include <TLeaf.h>
 #include <TTreeReader.h>
@@ -15,33 +17,46 @@
 
 #include "ivanp/pack.hh"
 #include "ivanp/error.hh"
-#include "ivanp/debug/type_str.hh"
 
-#define ROOT_LEAF_TYPES \
-  (Char_t)(UChar_t)(Short_t)(UShort_t)(Int_t)(UInt_t)\
-  (Float_t)(Double_t)(Long64_t)(ULong64_t)(Bool_t)
+namespace ivanp {
 
-template <typename> constexpr const char* root_type_str();
-
-#define ROOT_TYPE_STR(r, data, T) \
-  template <> \
-  constexpr const char* root_type_str<T>() { return BOOST_PP_STRINGIZE(T); }
-
-BOOST_PP_SEQ_FOR_EACH(ROOT_TYPE_STR,,ROOT_LEAF_TYPES)
+template <typename>
+constexpr const char* root_type_str();
+template <>
+constexpr const char* root_type_str<Char_t>() { return "Char_t"; }
+template <>
+constexpr const char* root_type_str<UChar_t>() { return "UChar_t"; }
+template <>
+constexpr const char* root_type_str<Short_t>() { return "Short_t"; }
+template <>
+constexpr const char* root_type_str<UShort_t>() { return "UShort_t"; }
+template <>
+constexpr const char* root_type_str<Int_t>() { return "Int_t"; }
+template <>
+constexpr const char* root_type_str<UInt_t>() { return "UInt_t"; }
+template <>
+constexpr const char* root_type_str<Float_t>() { return "Float_t"; }
+template <>
+constexpr const char* root_type_str<Double_t>() { return "Double_t"; }
+template <>
+constexpr const char* root_type_str<Long64_t>() { return "Long64_t"; }
+template <>
+constexpr const char* root_type_str<ULong64_t>() { return "ULong64_t"; }
+template <>
+constexpr const char* root_type_str<Bool_t>() { return "Bool_t"; }
 
 template <typename... Ts>
 class branch_reader {
 public:
   using value_type = std::common_type_t<std::remove_extent_t<Ts>...>;
 
-  static constexpr bool is_array =
-    std::is_array<ivanp::nth_type<0,Ts...>>::value;
+  static constexpr bool is_array = std::is_array<pack_head_t<Ts...>>::value;
 
 private:
   size_t index;
 
   template <size_t I>
-  using type = ivanp::nth_type<I,std::remove_extent_t<Ts>...>;
+  using type = typename std::tuple_element<I,std::tuple<Ts...>>::type;
 
   template <typename T>
   using reader_type = std::conditional_t< is_array,
@@ -49,7 +64,7 @@ private:
     TTreeReaderValue<std::remove_extent_t<T>>
   >;
 
-  char data[ std::max(sizeof(reader_type<Ts>)...) ];
+  char data[ std::max({sizeof(reader_type<Ts>)...}) ];
 
   template <size_t I=0>
   std::enable_if_t<(I<sizeof...(Ts)),size_t>
@@ -60,8 +75,7 @@ private:
   template <size_t I=0>
   std::enable_if_t<(I==sizeof...(Ts)),size_t>
   get_index [[noreturn]] (const char* type_name) {
-    throw ivanp::error(ivanp::type_str<branch_reader<Ts...>>(),
-      " cannot read ",type_name);
+    throw error("this branch_reader cannot read ",type_name);
   }
 
   template <size_t I>
@@ -77,20 +91,28 @@ private:
     f(cast<I>());
   }
 
+  static auto* get_leaf(TTree* tree, const char* name) {
+    auto* leaf = tree->GetLeaf(name);
+    if (leaf) return leaf;
+    throw error("no leaf \"",name,"\" in tree \"",tree->GetName(),'\"');
+  }
+
 public:
   branch_reader(TTreeReader& reader, const char* branch_name)
   : index(get_index(
-      reader.GetTree()->GetLeaf(branch_name)->GetTypeName()
+      get_leaf(reader.GetTree(),branch_name)->GetTypeName()
     ))
   {
     call([&](auto* p) {
-      using T = ivanp::decay_ptr_t<decltype(p)>;
+      using T = std::decay_t<decltype(*p)>;
       new(p) T(reader,branch_name);
     });
   }
+  branch_reader(TTreeReader& reader, const std::string& branch_name)
+  : branch_reader(reader,branch_name.c_str()) { }
   ~branch_reader() {
     call([](auto* p) {
-      using T = ivanp::decay_ptr_t<decltype(p)>;
+      using T = std::decay_t<decltype(*p)>;
       p->~T();
     });
   }
@@ -114,38 +136,39 @@ public:
   }
 };
 
-using float_reader = branch_reader<double,float>;
-using floats_reader = branch_reader<double[],float[]>;
-
 template <typename T>
-class branch_reader<T>: std::conditional_t<
-  std::is_array<T>::value,
-  TTreeReaderArray<std::remove_extent_t<T>>,
-  TTreeReaderValue<T>>
-{
+class branch_reader<T> {
 public:
   using value_type = std::remove_extent_t<T>;
 
   static constexpr bool is_array = std::is_array<T>::value;
 
 private:
-  using base = std::conditional_t< is_array,
+  using impl_type = std::conditional_t< is_array,
     TTreeReaderArray<value_type>,
-    TTreeReaderValue<value_type>>;
+    TTreeReaderValue<value_type>
+  >;
+  impl_type impl;
 
 public:
-  using base::base;
-  using base::GetBranchName;
+  branch_reader(TTreeReader& reader, const char* branch_name)
+  : impl(reader,branch_name) { }
+  branch_reader(TTreeReader& reader, const std::string& branch_name)
+  : branch_reader(reader,branch_name.c_str()) { }
 
-  value_type& operator*() { return base::operator*(); }
+  const char* GetBranchName() const noexcept { return impl.GetBranchName(); }
+
+  value_type& operator*() { return *impl; }
 
   template <bool A = is_array, typename V = value_type>
   std::enable_if_t<A,V&>
-  operator[](size_t i) { return base::operator[](i); }
+  operator[](size_t i) { return impl[i]; }
 
   template <bool A = is_array, typename V = value_type>
   std::enable_if_t<!A, decltype(std::declval<V&>()[0])>
-  operator[](size_t i) { return base::operator*()[i]; }
+  operator[](size_t i) { return (*impl)[i]; }
 };
+
+}
 
 #endif

@@ -6,17 +6,24 @@
 
 namespace ivanp {
 
-struct error : std::runtime_error {
+struct error: std::runtime_error {
   using std::runtime_error::runtime_error;
   template <typename... T>
-  error(T&&... x): std::runtime_error(cat(x...)) { };
+  error(T&&... x): std::runtime_error(cat(std::forward<T>(x)...)) { };
   error(const char* str): std::runtime_error(str) { };
 };
 
 }
 
 inline std::ostream& operator<<(std::ostream& s, const std::exception& e) {
-  return s << "\033[31m" << e.what() << "\033[0m";
+  return s << e.what();
 }
+
+#define IVANP_ERROR_STR1(x) #x
+#define IVANP_ERROR_STR(x) IVANP_ERROR_STR1(x)
+
+#define IVANP_ERROR_PREF __FILE__ ":" IVANP_ERROR_STR(__LINE__) ": "
+
+#define THROW(...) throw ivanp::error(IVANP_ERROR_PREF, __VA_ARGS__);
 
 #endif
