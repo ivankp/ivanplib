@@ -229,7 +229,7 @@ auto slice(
     typename std::tuple_element_t<I,specs>...>;
 
   const auto& axes = hist.axes();
-  const auto reordered_axes = std::tie(as_const(std::get<I>(axes))...);
+  const auto reordered_axes = std::tie(ivanp::as_const(std::get<I>(axes))...);
 
   const auto reordered_nbins = make_array<ivanp::axis_size_type>(
     ( std::get<I>(axes).nbins()

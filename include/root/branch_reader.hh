@@ -9,6 +9,8 @@
 
 #include <tuple>
 #include <algorithm>
+#include <cstring>
+#include <string>
 
 #include <TLeaf.h>
 #include <TTreeReader.h>
@@ -50,31 +52,34 @@ class branch_reader {
 public:
   using value_type = std::common_type_t<std::remove_extent_t<Ts>...>;
 
-  static constexpr bool is_array = std::is_array<pack_head_t<Ts...>>::value;
+  static constexpr bool is_array =
+    maybe_is_v<std::is_array,pack_head_t<Ts...>>;
 
 private:
   size_t index;
 
   template <size_t I>
-  using type = typename std::tuple_element<I,std::tuple<Ts...>>::type;
+  using type = std::remove_extent_t<std::tuple_element_t<I,std::tuple<Ts...>>>;
 
   template <typename T>
   using reader_type = std::conditional_t< is_array,
-    TTreeReaderArray<std::remove_extent_t<T>>,
-    TTreeReaderValue<std::remove_extent_t<T>>
+    TTreeReaderArray<T>,
+    TTreeReaderValue<T>
   >;
 
-  char data[ std::max({sizeof(reader_type<Ts>)...}) ];
+  // test_type<reader_type<type<0>>> test;
+
+  char data[ std::max({sizeof(reader_type<std::remove_extent_t<Ts>>)...}) ];
 
   template <size_t I=0>
   std::enable_if_t<(I<sizeof...(Ts)),size_t>
-  get_index(const char* type_name) {
+  get_index(const char* type_name) const {
     if (!strcmp(root_type_str<type<I>>(),type_name)) return I;
     else return get_index<I+1>(type_name);
   }
   template <size_t I=0>
   std::enable_if_t<(I==sizeof...(Ts)),size_t>
-  get_index [[noreturn]] (const char* type_name) {
+  get_index [[noreturn]] (const char* type_name) const {
     throw error("this branch_reader cannot read ",type_name);
   }
 
@@ -135,6 +140,9 @@ public:
     return x;
   }
 };
+
+using float_reader = branch_reader<double,float>;
+using floats_reader = branch_reader<double[],float[]>;
 
 template <typename T>
 class branch_reader<T> {
