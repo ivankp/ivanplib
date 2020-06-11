@@ -7,17 +7,16 @@
 #ifndef BRANCH_READER_HH
 #define BRANCH_READER_HH
 
-#include <tuple>
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 #include <TLeaf.h>
 #include <TTreeReader.h>
 #include <TTreeReaderValue.h>
 #include <TTreeReaderArray.h>
 
-#include "ivanp/pack.hh"
 #include "ivanp/error.hh"
 
 namespace ivanp {
@@ -52,14 +51,13 @@ class branch_reader {
 public:
   using value_type = std::common_type_t<std::remove_extent_t<Ts>...>;
 
-  static constexpr bool is_array =
-    maybe_is_v<std::is_array,pack_head_t<Ts...>>;
+  static constexpr bool is_array = ( ... || std::is_array_v<Ts> );
+
+  static constexpr size_t num_types = sizeof...(Ts);
+  static_assert(num_types>0);
 
 private:
   size_t index;
-
-  template <size_t I>
-  using type = std::remove_extent_t<std::tuple_element_t<I,std::tuple<Ts...>>>;
 
   template <typename T>
   using reader_type = std::conditional_t< is_array,
@@ -67,33 +65,29 @@ private:
     TTreeReaderValue<T>
   >;
 
-  // test_type<reader_type<type<0>>> test;
-
   char data[ std::max({sizeof(reader_type<std::remove_extent_t<Ts>>)...}) ];
 
-  template <size_t I=0>
-  std::enable_if_t<(I<sizeof...(Ts)),size_t>
-  get_index(const char* type_name) const {
-    if (!strcmp(root_type_str<type<I>>(),type_name)) return I;
-    else return get_index<I+1>(type_name);
-  }
-  template <size_t I=0>
-  std::enable_if_t<(I==sizeof...(Ts)),size_t>
-  get_index [[noreturn]] (const char* type_name) const {
-    throw error("this branch_reader cannot read ",type_name);
+  template <typename U, typename... Us>
+  size_t get_index(const char* type_name) const {
+    if (!strcmp(root_type_str<U>(),type_name))
+      return num_types - (sizeof...(Us) + 1);
+    else if constexpr (sizeof...(Us) > 0)
+      return get_index<Us...>(type_name);
+    else
+      throw error("this branch_reader cannot read ",type_name);
   }
 
-  template <size_t I>
-  auto cast() { return reinterpret_cast<reader_type<type<I>>*>(data); }
-
-  template <typename F, size_t I=0>
-  std::enable_if_t<(sizeof...(Ts)-I>1)> call(F&& f) {
-    if (index==I) f(cast<I>());
-    else call<F,I+1>(std::forward<F>(f));
+  template <typename U, typename... Us, typename F>
+  auto call_impl(F&& f) {
+    if (index == (num_types - (sizeof...(Us) + 1)))
+      return f(reinterpret_cast<reader_type<U>*>(+data));
+    else if constexpr (sizeof...(Us) > 0)
+      return call_impl<Us...>(std::forward<F>(f));
+    else __builtin_unreachable();
   }
-  template <typename F, size_t I=0>
-  std::enable_if_t<(sizeof...(Ts)-I==1)> call(F&& f) {
-    f(cast<I>());
+  template <typename F>
+  auto call(F&& f) {
+    return call_impl<std::remove_extent_t<Ts>...>(std::forward<F>(f));
   }
 
   static auto* get_leaf(TTree* tree, const char* name) {
@@ -104,7 +98,7 @@ private:
 
 public:
   branch_reader(TTreeReader& reader, const char* branch_name)
-  : index(get_index(
+  : index(get_index<std::remove_extent_t<Ts>...>(
       get_leaf(reader.GetTree(),branch_name)->GetTypeName()
     ))
   {
@@ -123,21 +117,15 @@ public:
   }
 
   value_type operator*() {
-    value_type x;
-    call([&](auto* p){ x = **p; });
-    return x;
+    return call([&](auto* p) -> value_type { return **p; });
   }
 
   value_type operator[](size_t i) {
-    value_type x;
-    call([&,i](auto* p){ x = (*p)[i]; });
-    return x;
+    return call([&,i](auto* p) -> value_type { return (*p)[i]; });
   }
 
   const char* GetBranchName() {
-    const char* x;
-    call([&](auto* p){ x = p->GetBranchName(); });
-    return x;
+    return call([&](auto* p){ return p->GetBranchName(); });
   }
 };
 
@@ -149,7 +137,7 @@ class branch_reader<T> {
 public:
   using value_type = std::remove_extent_t<T>;
 
-  static constexpr bool is_array = std::is_array<T>::value;
+  static constexpr bool is_array = std::is_array_v<T>;
 
 private:
   using impl_type = std::conditional_t< is_array,
